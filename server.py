@@ -20,8 +20,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PREVIEW = ROOT / "preview"
+SOURCE_CATALOG_PATH = ROOT / "data" / "source_catalog.json"
 TOKEN = re.compile(r"[\wÄÖÜäöüß]{2,}", re.UNICODE)
 ACCESS_CACHE = {}
+FEED_CACHE = {}
+try:
+    SOURCE_CATALOG = json.loads(SOURCE_CATALOG_PATH.read_text()).get("sources", [])
+except (OSError, ValueError):
+    SOURCE_CATALOG = []
 STOP = set("""
 a an and are as at be been being but by can could did do does doing down during each few for from further had has have having he her here hers herself him himself his how i if in into is it its itself just me more most my myself no nor not now of off on once only or other our ours ourselves out over own same she should so some such than that the their theirs them themselves then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your yours yourself yourselves
 aber alle als also am an andere auch auf aus bei bin bis bist bitte bleiben dadurch dafür dagegen daher damit danach dann das dass dein deine dem den der des deshalb die dies diese dieser dieses doch dort du durch eigentlich ein eine einem einen einer eines einfach einmal er es etwas euer für gegen gewesen hat hatte hatten haben hier hin hinter ich ihm ihn ihre im immer in ins ist ja jeder jede jedes kann kein keine mit man mehr mein meine mich mir mit muss nach nachdem neben nein nicht nichts noch nun nur ob oder ohne sein seine selbst sich sie sind so über um und uns unser unter vom von vor war waren warum was weiter weil welcher welche welches wenn werden wie wieder wir wo zu zum zur zwischen
@@ -47,6 +53,25 @@ GERMAN_FOR_ENGLISH = {"india":"indien", "boy":"junge", "child":"kind", "grow":"w
 ENGLISH_FOR_GERMAN = {"india":"india", "boy":"boy", "child":"child", "grow":"grew", "poverty":"poverty", "slum":"slum", "nazi":"nazi", "membership":"membership", "records":"records", "family":"family", "history":"history", "legitimize":"legitimized", "party_member":"party member"}
 # Broad concepts help discovery, but cannot alone justify an alternative.
 BROAD_TOPICS = {"nazi", "family", "history", "records", "regime", "war", "politics", "government"}
+FEED_TOPIC_MAP = {
+    "News": {"news", "politics", "government", "war", "world", "election", "crime", "membership", "nazi", "history"},
+    "History": {"history", "nazi", "war", "records", "membership", "family", "archive"},
+    "Science": {"science", "health", "research", "climate", "space", "medicine", "study"},
+    "Environment": {"environment", "climate", "energy", "nature", "pollution", "wildlife"},
+    "Nature": {"nature", "animal", "wildlife", "climate", "environment"},
+    "Tech": {"tech", "technology", "ai", "internet", "software", "cyber", "computer", "programming"},
+    "Cyber security": {"security", "cyber", "privacy", "hacking", "data"},
+    "Programming": {"programming", "developer", "software", "code", "technology"},
+    "Web Development": {"web", "internet", "software", "technology", "programming"},
+    "Business & Economy": {"business", "economy", "finance", "company", "market", "industry"},
+    "Personal finance": {"finance", "money", "bank", "housing", "tax", "invest"},
+    "Startups": {"startup", "business", "technology", "company", "founder"},
+    "Space": {"space", "astronomy", "nasa", "planet", "science"},
+    "Books": {"book", "author", "literature", "history", "culture"},
+    "Sports": {"sport", "football", "soccer", "tennis", "cricket", "athlete"},
+    "Food": {"food", "recipe", "restaurant", "cooking", "nutrition"},
+    "Travel": {"travel", "tourism", "city", "culture"},
+}
 PUBLISHER_DOMAINS = {"sueddeutsche.de":"sueddeutsche.de", "sz.de":"sueddeutsche.de"}
 
 def same_publisher(host: str, source_host: str):
@@ -57,13 +82,19 @@ def same_publisher(host: str, source_host: str):
 
 class MetadataParser(HTMLParser):
     def __init__(self):
-        super().__init__(); self.meta = {}; self.title = ""; self.in_title = False; self.text = []; self._skip = 0; self.article_depth = 0; self.article_text = []; self.main_depth = 0; self.main_text = []; self.paywall_markup = False
+        super().__init__(); self.meta = {}; self.title = ""; self.in_title = False; self.text = []; self._skip = 0; self.article_depth = 0; self.article_text = []; self.main_depth = 0; self.main_text = []; self.paywall_markup = False; self.author_present = False; self.article_hrefs = []; self.page_hrefs = []
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         if tag == "meta":
             key = a.get("property") or a.get("name") or a.get("itemprop")
-            if key and a.get("content"): self.meta[key.lower()] = a["content"].strip()
+            if key and a.get("content"):
+                self.meta[key.lower()] = a["content"].strip()
+                if key.lower() in ("author", "article:author", "parsely-author", "citation_author", "dc.creator"): self.author_present = True
         elif tag == "title": self.in_title = True
+        if a.get("itemprop", "").lower() in ("author", "creator"): self.author_present = True
+        if tag == "a" and a.get("href"):
+            self.page_hrefs.append(a["href"])
+            if self.article_depth: self.article_hrefs.append(a["href"])
         if tag == "article": self.article_depth += 1
         if tag == "main": self.main_depth += 1
         if tag in ("div", "section", "aside", "article") and re.search(r"pay.?wall|subscriber.?only|premium.?content|paid.?content|metered.?content|registration.?wall|article.?gate|content.?gate", (a.get("id", "") + " " + a.get("class", "")).lower()): self.paywall_markup = True
@@ -80,20 +111,43 @@ class MetadataParser(HTMLParser):
             if self.article_depth: self.article_text.append(data.strip())
             if self.main_depth: self.main_text.append(data.strip())
 
+def quality_signals(parser, page_url, page):
+    """Report observable reporting/transparency cues, never a truth rating."""
+    signals = []
+    if parser.author_present or re.search(r'"author"\s*:\s*\{', page, re.I):
+        signals.append("Autorenschaft im Quelltext genannt")
+    base_host = (urllib.parse.urlsplit(page_url).hostname or "").lower().removeprefix("www.")
+    external_refs = set()
+    for href in parser.article_hrefs:
+        try:
+            host = (urllib.parse.urlsplit(urllib.parse.urljoin(page_url, href)).hostname or "").lower().removeprefix("www.")
+            if host and host != base_host and not host.endswith("." + base_host): external_refs.add(host)
+        except Exception:
+            continue
+    if len(external_refs) >= 2:
+        signals.append("Mehrere externe Quellen verlinkt")
+    policy_hrefs = " ".join(parser.page_hrefs).lower()
+    if re.search(r"correction|errata|richtigstellung|korrektur|editorial.?standards|ethics.?policy", policy_hrefs):
+        signals.append("Korrektur-/Redaktionshinweis verlinkt")
+    if re.search(r"about|imprint|impressum|transparen|masthead|funding|finanzierung|contact|kontakt|editorial.?team", policy_hrefs):
+        signals.append("Transparenz-/Kontaktseite verlinkt")
+    return signals
+
 PAYWALL_TEXT = re.compile(r"(?:subscribe\s+to\s+(?:read|continue)|subscription\s+(?:required|only)|sign\s+in\s+to\s+(?:continue\s+)?reading|log\s*in\s+to\s+read\s+(?:the\s+)?full\s+article|this\s+article\s+is\s+for\s+subscribers|only\s+available\s+to\s+subscribers|already\s+a\s+subscriber|subscriber.?only|premium\s+(?:article|content)|metered\s+(?:article|paywall)|register\s+to\s+(?:read|continue)|nur\s+für\s+abonnenten|exklusiv\s+für\s+abonnenten|abo\s+(?:erforderlich|abschließen)|weiterlesen\s+mit\s+(?:ihrem|deinem)\s+abo|plus-artikel|plus\s+freischalten|artikel\s+ist\s+kostenpflichtig|zahlungspflichtig|kostenpflichtig\s+lesen|zum\s+weiterlesen\s+abo|jetzt\s+(?:abonnieren|mitglied\s+werden)|registrieren\s+zum\s+weiterlesen)", re.I)
 
 def verify_free_access(url: str, source_host: str = ""):
     """Use publisher markup and readable article content; cache short-lived results."""
     cached = ACCESS_CACHE.get(url)
     if cached and cached[0] > time.monotonic():
-        access, final_url = cached[1], cached[2]
+        access, final_url, signals = cached[1], cached[2], cached[3]
         if access == "same_source" or not same_publisher(urllib.parse.urlsplit(final_url).hostname or "", source_host):
-            return access, final_url
-    def verdict(access, final_url):
+            return access, final_url, signals
+    def verdict(access, final_url, signals=None):
+        signals = signals or []
         if access != "same_source":
-            ACCESS_CACHE[url] = (time.monotonic() + 900, access, final_url)
+            ACCESS_CACHE[url] = (time.monotonic() + 900, access, final_url, signals)
             if len(ACCESS_CACHE) > 512: ACCESS_CACHE.pop(next(iter(ACCESS_CACHE)))
-        return access, final_url
+        return access, final_url, signals
     try:
         # Publisher metadata and paywall selectors live in the document head;
         # cap transfer size and time to avoid downloading whole articles.
@@ -102,19 +156,20 @@ def verify_free_access(url: str, source_host: str = ""):
         if same_publisher(final_host, source_host): return verdict("same_source", final_url)
         parser = MetadataParser(); parser.feed(page)
         lowered = page.lower()
+        signals = quality_signals(parser, final_url, page)
         # Structured signals include Google's Schema.org paywall markup.
         if re.search(r'"isaccessibleforfree"\s*:\s*false|isaccessibleforfree\s*["\']?\s*content\s*=\s*["\']false|"(?:contenttier|accesslevel)"\s*:\s*"(?:premium|subscriber|paid)"', lowered):
             return verdict("paywall", final_url)
         page_text = html.unescape(" ".join(parser.text))
         if PAYWALL_TEXT.search(page_text) or parser.paywall_markup: return verdict("paywall", final_url)
         if re.search(r'"isaccessibleforfree"\s*:\s*true', lowered):
-            return verdict("verified_free", final_url)
+            return verdict("verified_free", final_url, signals)
         # A page shell, teaser, or access-denied response is not evidence of free access.
         article_text = re.sub(r"\s+", " ", " ".join(parser.article_text)).strip()
         main_text = re.sub(r"\s+", " ", " ".join(parser.main_text)).strip()
-        if len(article_text) >= 1200: return verdict("likely_free", final_url)
-        if len(main_text) >= 1800: return verdict("likely_free", final_url)
-        return verdict("unknown", final_url)
+        if len(article_text) >= 1200: return verdict("likely_free", final_url, signals)
+        if len(main_text) >= 1800: return verdict("likely_free", final_url, signals)
+        return verdict("unknown", final_url, signals)
     except urllib.error.HTTPError as e:
         return verdict("paywall" if e.code in (401, 402, 403) else "unavailable" if e.code in (404, 410) else "unknown", url)
     except Exception:
@@ -142,6 +197,73 @@ def fetch(url: str, limit: int = 1_500_000, timeout: int = 12):
         body = resp.read(limit)
         charset = resp.headers.get_content_charset() or "utf-8"
         return final_url, body.decode(charset, errors="replace")
+
+def source_categories(topic_words):
+    preferred = []
+    for category, keywords in FEED_TOPIC_MAP.items():
+        if topic_words & keywords:
+            preferred.append(category)
+    for category in ("News", "History", "Science", "Environment"):
+        if category not in preferred: preferred.append(category)
+    return preferred
+
+def feed_items(source):
+    feed_url = source["feed"]
+    cached = FEED_CACHE.get(feed_url)
+    if cached and cached[0] > time.monotonic(): return cached[1]
+    items = []
+    try:
+        _, xml = fetch(feed_url, 220_000, timeout=4)
+        root = ET.fromstring(xml)
+        for node in root.iter():
+            if node.tag.rsplit("}", 1)[-1].lower() not in ("item", "entry"): continue
+            fields = {}
+            for child in list(node):
+                name = child.tag.rsplit("}", 1)[-1].lower()
+                if name == "link":
+                    value = child.attrib.get("href") or "".join(child.itertext())
+                else:
+                    value = " ".join(child.itertext())
+                if name in ("title", "description", "summary", "encoded", "content", "pubdate", "published", "updated", "date") and value:
+                    fields[name] = value
+            title = html.unescape(re.sub(r"<[^>]+>", " ", fields.get("title", ""))).strip()
+            link = fields.get("link", "").strip()
+            if not title or not link or urllib.parse.urlsplit(link).scheme not in ("http", "https"): continue
+            description = fields.get("description") or fields.get("summary") or fields.get("encoded") or fields.get("content") or ""
+            description = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", description))).strip()
+            source_domain = urllib.parse.urlsplit(source.get("website") or feed_url).hostname or ""
+            items.append({"title":title, "url":link, "source":source["name"], "sourceDomain":source_domain, "description":description[:500], "published":fields.get("pubdate") or fields.get("published") or fields.get("updated") or fields.get("date", ""), "language":source.get("language", "en"), "sourceKind":source.get("kind", "blog_or_specialist"), "sourceTopic":source.get("topic", "News"), "catalogued":True})
+            if len(items) >= 15: break
+    except Exception:
+        items = []
+    FEED_CACHE[feed_url] = (time.monotonic() + 1200, items)
+    if len(FEED_CACHE) > 800: FEED_CACHE.pop(next(iter(FEED_CACHE)))
+    return items
+
+def search_curated_feeds(topic_words):
+    preferred = source_categories(topic_words)
+    priorities = {category: i for i, category in enumerate(preferred)}
+    language_priority = {"de": 0, "en": 1}
+    candidates = [s for s in SOURCE_CATALOG if s.get("topic") in priorities and s.get("language") in ("de", "en")]
+    by_topic = {category: [] for category in preferred}
+    for source in candidates: by_topic[source.get("topic")].append(source)
+    for sources in by_topic.values():
+        sources.sort(key=lambda s: (0 if "blog" in s.get("kind", "") else 1, language_priority.get(s.get("language"), 9), s.get("name", "").lower()))
+    # Round-robin topic collections so a crowded News category cannot consume
+    # the entire discovery budget before independent subject blogs are searched.
+    picked = []
+    indexes = {category: 0 for category in preferred}
+    while len(picked) < 16:
+        added = False
+        for category in preferred:
+            index = indexes[category]
+            if index < len(by_topic[category]):
+                picked.append(by_topic[category][index]); indexes[category] += 1; added = True
+                if len(picked) >= 16: break
+        if not added: break
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        groups = list(pool.map(feed_items, picked))
+    return [item for group in groups for item in group]
 
 def terms(text: str):
     return [t.lower() for t in TOKEN.findall(text) if t.lower() not in STOP and not t.isdigit()]
@@ -208,6 +330,29 @@ def search_news(meta):
     total_topic_weight = sum(weights[w] for w in core_topics) or 1
     matches = {}
     candidates = {}
+    def consider(item, provider):
+        title, link = item.get("title", ""), item.get("url", "")
+        if not title or not link: return
+        host = (urllib.parse.urlsplit(link).hostname or "").lower()
+        if same_publisher(host, source_host) or (item.get("sourceDomain") and same_publisher(item["sourceDomain"], source_host)): return
+        text = title + " " + item.get("description", "")
+        result_words = set(canonical_terms(text))
+        title_words = set(canonical_terms(title))
+        core = set(ranked[:7])
+        overlap = core & result_words
+        title_overlap = core & title_words
+        if len(overlap) < 2 or not title_overlap or not (overlap - BROAD_TOPICS): return
+        paywall_marker = bool(re.search(r"bild\s*plus|bildplus|sz\s*plus|plus-abo|paywall|abo-artikel|subscription required|subscribe to read|\(\s*s\+\s*\)|(?<!\w)s\+(?!\w)", (title + " " + item.get("source", "")).lower()))
+        if paywall_marker: return
+        key = re.sub(r"[^a-z0-9]", "", title.lower())
+        body_words = set(canonical_terms(item.get("description", "")))
+        matched_weight = sum(weights[w] * (1.0 if w in title_overlap else 0.45 if w in body_words else 0.0) for w in core_topics)
+        raw_score = min(99, round(100 * matched_weight / total_topic_weight))
+        score = min(99, round(raw_score + (100 - raw_score) * 0.08))
+        if source_title_words and source_title_words == title_words: score = 100
+        result = {"title":title, "description":item.get("description", "")[:360], "url":link, "source":item.get("source") or host, "lang":item.get("language", "en"), "published":item.get("published", ""), "score":score, "matchedTopics":list(overlap), "provider":provider, "sourceKind":item.get("sourceKind", "newsroom"), "sourceTopic":item.get("sourceTopic", ""), "catalogued":bool(item.get("catalogued"))}
+        current = candidates.get(key)
+        if current is None or score > current["score"] or (result["catalogued"] and not current.get("catalogued")): candidates[key] = result
     for provider, query, requested_lang, extras in queries:
         if not query.strip(): continue
         try:
@@ -222,6 +367,7 @@ def search_news(meta):
                         "title":item.findtext("title", "").strip(),
                         "url":item.findtext("link", "").strip(),
                         "source":item.findtext("source", "").strip(),
+                        "sourceDomain":urllib.parse.urlsplit(item.find("source").attrib.get("url", "")).hostname or "" if item.find("source") is not None else "",
                         "description":re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", desc))).strip(),
                         "published":item.findtext("pubDate", "").strip(),
                         "language":requested_lang
@@ -236,48 +382,23 @@ def search_news(meta):
                     if lang.startswith("german"): lang = "de"
                     elif lang.startswith("english"): lang = "en"
                     else: continue
-                    records.append({"title":item.get("title", "").strip(), "url":item.get("url", "").strip(), "source":item.get("domain", "").strip(), "description":"", "published":item.get("seendate", ""), "language":lang})
+                    records.append({"title":item.get("title", "").strip(), "url":item.get("url", "").strip(), "source":item.get("domain", "").strip(), "sourceDomain":item.get("domain", "").strip(), "description":"", "published":item.get("seendate", ""), "language":lang})
         except Exception:
             continue
-        for item in records:
-            title, link = item["title"], item["url"]
-            if not title or not link: continue
-            host = (urllib.parse.urlsplit(link).hostname or "").lower()
-            if same_publisher(host, source_host) or same_publisher(host, item["source"]) or same_publisher(item["source"], source_host): continue
-            text = title + " " + item["description"]
-            result_words = set(canonical_terms(text))
-            title_words = set(canonical_terms(title))
-            core = set(ranked[:7])
-            overlap = core & result_words
-            title_overlap = core & title_words
-            if len(overlap) < 2 or not title_overlap or not (overlap - BROAD_TOPICS): continue
-            paywall_marker = bool(re.search(r"bild\s*plus|bildplus|sz\s*plus|plus-abo|paywall|abo-artikel|subscription required|subscribe to read|\(\s*s\+\s*\)|(?<!\w)s\+(?!\w)", (title + " " + item["source"]).lower()))
-            if paywall_marker: continue
-            key = re.sub(r"[^a-z0-9]", "", title.lower())
-            body_words = set(canonical_terms(item["description"]))
-            # Score shared meaning only, not exact title word order. 100 is
-            # reserved for identical normalized headlines; partial topic overlap
-            # remains visibly lower even when the search index returned it.
-            matched_weight = sum(weights[w] * (1.0 if w in title_overlap else 0.45 if w in body_words else 0.0) for w in core_topics)
-            raw_score = min(99, round(100 * matched_weight / total_topic_weight))
-            # A small optimistic calibration offsets headline/metadata sparsity;
-            # it can't turn a weak match into a strong one.
-            score = min(99, round(raw_score + (100 - raw_score) * 0.08))
-            target_title_words = set(canonical_terms(title))
-            if source_title_words and source_title_words == target_title_words: score = 100
-            result = {"title":title, "description":item["description"][:360], "url":link, "source":item["source"] or host, "lang":item["language"], "published":item["published"], "score":score, "matchedTopics":list(overlap), "provider":provider}
-            current = candidates.get(key)
-            if current is None or score > current["score"]: candidates[key] = result
+        for item in records: consider(item, provider)
+    for item in search_curated_feeds(set(ranked)):
+        consider(item, "kuratiert")
     # Check only the highest relevance candidates. Publisher markup is decisive;
     # unknown/blocked/ambiguous pages stay hidden to avoid frustrating readers.
     matches = {}
     top = sorted(candidates.items(), key=lambda item: -item[1]["score"])[:24]
     with ThreadPoolExecutor(max_workers=16) as pool:
         checked = list(pool.map(lambda pair: verify_free_access(pair[1]["url"], source_host), top))
-    for (key, result), (access, final_url) in zip(top, checked):
+    for (key, result), (access, final_url, signals) in zip(top, checked):
         if access in ("verified_free", "likely_free"):
             result["access"] = access
             result["url"] = final_url
+            result["qualitySignals"] = signals
             matches[key] = result
     print("Zugriffsprüfung: %d Kandidaten, %d als frei bestätigt/lesbar gezeigt, %d wegen Paywall oder unklarem Zugriff ausgeblendet." % (len(candidates), len(matches), len(candidates) - len(matches)), flush=True)
     results = sorted(matches.values(), key=lambda x: (-x["score"], x["title"].lower()))

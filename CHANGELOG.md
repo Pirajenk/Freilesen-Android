@@ -1,5 +1,13 @@
 # Änderungsprotokoll
 
+## 1.0.6 — 2026-09-26
+- 500 Quellen- und Blog-Feeds aus einer CC0-lizenzierten Empfehlungssammlung ergänzt, plus deutschsprachige freie Redaktionen und Blogs.
+- Themenbezogene RSS-/Atom-Feeds werden zusätzlich zu Google News und GDELT nach passenden Beiträgen durchsucht; Feed-Ergebnisse werden zeitlich begrenzt gecacht.
+- Startseite auf freie journalistische Stimmen ausgerichtet: „Wir unterstützen freien Journalismus und unabhängige Blogs.“
+- Sorgfaltshinweise zeigen nur beobachtete Signale: genannte Autorenschaft, mehrere externe Artikelquellen sowie verlinkte Korrektur-/Transparenzseiten. Keine Sterne oder unbelegten Qualitätsurteile.
+- Quellkatalog klar als kuratiert und nicht traffic-gerankt dokumentiert; pro Artikel gilt weiterhin eine eigene Paywall-Prüfung.
+- Android und Vorschau nennen Blog-/Fachfeeds und zeigen die beobachteten Quellenhinweise.
+
 ## 1.0.5 — 2026-09-26
 - Erkennung an Google-/Schema.org-Paywall-Markup ausgerichtet: `isAccessibleForFree`, `hasPart`, Paywall-Selektoren und Premium-/Abo-Metadaten werden als Signale gelesen.
 - Fehler in der Groß-/Kleinschreibung der JSON-LD-Erkennung behoben; strukturierte `isAccessibleForFree`-Werte werden jetzt tatsächlich erkannt.

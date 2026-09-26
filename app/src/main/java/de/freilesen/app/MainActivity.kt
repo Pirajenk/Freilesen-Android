@@ -51,7 +51,10 @@ private data class Story(
     val published: String = "",
     val score: Int = 0,
     val access: String = "",
-    val commonTopics: String = ""
+    val commonTopics: String = "",
+    val sourceKind: String = "newsroom",
+    val qualitySignals: String = "",
+    val catalogued: Boolean = false
 )
 
 private data class SearchResponse(
@@ -89,7 +92,10 @@ private suspend fun findArticles(articleUrl: String): SearchResponse = withConte
                     published = item.optString("published", ""),
                     score = item.optInt("score", 0).coerceIn(0, 100),
                     access = item.optString("access", ""),
-                    commonTopics = item.optJSONArray("matchedTopics")?.let { a -> (0 until a.length()).take(4).joinToString(" · ") { a.optString(it) } } ?: ""
+                    commonTopics = item.optJSONArray("matchedTopics")?.let { a -> (0 until a.length()).take(4).joinToString(" · ") { a.optString(it) } } ?: "",
+                    sourceKind = item.optString("sourceKind", "newsroom"),
+                    qualitySignals = item.optJSONArray("qualitySignals")?.let { a -> (0 until a.length()).joinToString(" · ") { a.optString(it) } } ?: "",
+                    catalogued = item.optBoolean("catalogued", false)
                 ))
             }
         }
@@ -133,7 +139,7 @@ private fun FreilesenApp() {
     val scope = rememberCoroutineScope()
     val libraryPrefs = remember { context.getSharedPreferences("freilesen-library", android.content.Context.MODE_PRIVATE) }
     var folders by remember { mutableStateOf(runCatching { val a=JSONArray(libraryPrefs.getString("folders", "[\"Allgemein\"]")); (0 until a.length()).map { a.getString(it) } }.getOrDefault(listOf("Allgemein"))) }
-    var savedStories by remember { mutableStateOf(runCatching { val a=JSONArray(libraryPrefs.getString("bookmarks", "[]")); (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o -> Story(o.optString("source"), o.optString("title"), o.optString("detail"), o.optString("url"), o.optString("language"), o.optString("published"), o.optInt("score"), o.optString("access"), o.optString("commonTopics")) to o.optString("folder", "Allgemein") } } }.getOrDefault(emptyList())) }
+    var savedStories by remember { mutableStateOf(runCatching { val a=JSONArray(libraryPrefs.getString("bookmarks", "[]")); (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o -> Story(o.optString("source"), o.optString("title"), o.optString("detail"), o.optString("url"), o.optString("language"), o.optString("published"), o.optInt("score"), o.optString("access"), o.optString("commonTopics"), o.optString("sourceKind", "newsroom"), o.optString("qualitySignals"), o.optBoolean("catalogued", false)) to o.optString("folder", "Allgemein") } } }.getOrDefault(emptyList())) }
     var showFolderDialog by remember { mutableStateOf(false) }
     var folderName by remember { mutableStateOf("") }
     var storyToSave by remember { mutableStateOf<Story?>(null) }
@@ -141,7 +147,7 @@ private fun FreilesenApp() {
     var currentFolder by remember { mutableStateOf("Allgemein") }
     fun persistLibrary() {
         val fs = JSONArray().apply { folders.forEach { put(it) } }
-        val bs = JSONArray().apply { savedStories.forEach { (s,f) -> put(JSONObject().put("source",s.source).put("title",s.title).put("detail",s.detail).put("url",s.url).put("language",s.language).put("published",s.published).put("score",s.score).put("access",s.access).put("commonTopics",s.commonTopics).put("folder",f)) } }
+        val bs = JSONArray().apply { savedStories.forEach { (s,f) -> put(JSONObject().put("source",s.source).put("title",s.title).put("detail",s.detail).put("url",s.url).put("language",s.language).put("published",s.published).put("score",s.score).put("access",s.access).put("commonTopics",s.commonTopics).put("sourceKind",s.sourceKind).put("qualitySignals",s.qualitySignals).put("catalogued",s.catalogued).put("folder",f)) } }
         libraryPrefs.edit().putString("folders",fs.toString()).putString("bookmarks",bs.toString()).apply()
     }
 
@@ -204,7 +210,9 @@ private fun FreilesenApp() {
                         Spacer(Modifier.height(10.dp))
                         Text("Lesen, was\nweiterführt.", fontSize = 34.sp, lineHeight = 39.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                         Spacer(Modifier.height(10.dp))
-                        Text("Gib einen Artikel-Link ein. Wir lesen Titel und Metadaten aus und suchen passende Perspektiven.", fontSize = 15.sp, lineHeight = 22.sp, color = Muted)
+                        Text("Wir unterstützen freien Journalismus und unabhängige Blogs.", fontSize = 15.sp, lineHeight = 22.sp, color = Green, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(6.dp))
+                        Text("Füge einen Artikel-Link ein. Wir suchen passende Berichte und Blog-Beiträge.", fontSize = 14.sp, lineHeight = 21.sp, color = Muted)
                         Spacer(Modifier.height(22.dp))
                         Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(16.dp)).border(1.dp, Line, RoundedCornerShape(16.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.Link, null, tint = Muted, modifier = Modifier.padding(horizontal = 9.dp))
@@ -273,9 +281,9 @@ private fun FreilesenApp() {
                             visibleResults.forEachIndexed { i, story -> StoryCard(story, savedStories.any { it.first.url==story.url }, { storyToSave=story }) { selected = i } }
                         }
                         Spacer(Modifier.height(14.dp))
-                        Text("QUELLEN, DIE WIR MÖGEN", fontSize = 10.sp, letterSpacing = 1.5.sp, color = Muted, fontWeight = FontWeight.Bold)
+                        Text("FREIE STIMMEN UND FACHBLOGS", fontSize = 10.sp, letterSpacing = 1.5.sp, color = Muted, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(10.dp))
-                        Text("Tagesschau   ·   BBC   ·   DW   ·   The Guardian   ·   Deutschlandfunk   ·   Reuters   ·   NPR", fontSize = 12.sp, lineHeight = 20.sp, color = Muted)
+                        Text("Netzpolitik.org   ·   CORRECTIV   ·   Übermedien   ·   ProPublica   ·   Bellingcat   ·   The Conversation", fontSize = 12.sp, lineHeight = 20.sp, color = Muted)
                         Spacer(Modifier.height(20.dp))
                         Column(Modifier.fillMaxWidth().background(Color(0xFFEDF1EA), RoundedCornerShape(15.dp)).border(1.dp, Color(0xFFDCE4DA), RoundedCornerShape(15.dp)).padding(17.dp)) {
                             Text("Freilesen bleibt kostenlos.", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Ink)
@@ -333,7 +341,7 @@ private fun StoryCard(story: Story, isSaved: Boolean, onSave: () -> Unit, onClic
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text((when (story.access) { "verified_free" -> "FREI GEPRÜFT"; "likely_free" -> "WAHRSCHEINLICH FREI"; else -> "MÖGLICHERWEISE FREI" }) + " · THEMENMATCH", fontSize = 9.sp, letterSpacing = 1.1.sp, color = Green, fontWeight = FontWeight.Bold)
+                    Text((when (story.access) { "verified_free" -> "FREI GEPRÜFT"; "likely_free" -> "WAHRSCHEINLICH FREI"; else -> "MÖGLICHERWEISE FREI" }) + if (story.catalogued) if (story.sourceKind.contains("independent")) " · UNABHÄNGIGE STIMME" else " · BLOG-/FACHFEED" else " · THEMENMATCH", fontSize = 9.sp, letterSpacing = 1.1.sp, color = Green, fontWeight = FontWeight.Bold)
                     Text(story.source, fontSize = 11.sp, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -347,6 +355,10 @@ private fun StoryCard(story: Story, isSaved: Boolean, onSave: () -> Unit, onClic
             if (story.commonTopics.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
                 Text("Gemeinsame Themen: ${story.commonTopics}", fontSize = 10.sp, lineHeight = 14.sp, color = Green, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (story.qualitySignals.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text("Quellenhinweise: ${story.qualitySignals}", fontSize = 10.sp, lineHeight = 14.sp, color = Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -382,6 +394,12 @@ private fun Reader(story: Story, onBack: () -> Unit) {
         Text(when (story.access) { "verified_free" -> "Beim Verlag ohne erkannte Bezahlschranke geprüft."; "likely_free" -> "Wahrscheinlich frei: Die Seite war lesbar, ein eindeutiges Freizugriffs-Merkmal fehlte."; else -> "Möglicherweise frei: Die Seite ließ sich nicht zuverlässig prüfen; ein eindeutiger Paywall-Hinweis wurde nicht erkannt." }, fontSize = 12.sp, color = Muted)
         Spacer(Modifier.height(5.dp))
         Text("Der Zugriff kann sich ändern; im Zweifel zeigt die Originalseite, ob eine Paywall erscheint.", fontSize = 12.sp, color = Muted)
+        Spacer(Modifier.height(18.dp))
+        Text("Hinweise zur Quellenpraxis", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+        Spacer(Modifier.height(6.dp))
+        Text(if (story.qualitySignals.isNotBlank()) story.qualitySignals else "Im Seitenquelltext wurden keine zusätzlichen Transparenz- oder Quellenhinweise erkannt.", fontSize = 12.sp, lineHeight = 18.sp, color = Muted)
+        Spacer(Modifier.height(5.dp))
+        Text("Das sind beobachtbare Hinweise, kein Wahrheitsurteil. Community-Bewertungen liegen derzeit nicht vor.", fontSize = 12.sp, lineHeight = 18.sp, color = Muted)
         Spacer(Modifier.height(30.dp))
         Text("Eine andere Perspektive zum Thema", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = Ink)
         Spacer(Modifier.height(12.dp))
