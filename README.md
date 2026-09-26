@@ -37,3 +37,12 @@ Der Server protokolliert Suchpfade ohne den eingegebenen Artikel-Link. Für die 
 ## VS Code und Android-Emulator
 
 VS Code-Erweiterungen: Kotlin (`fwcd.kotlin`) sowie Java/Gradle (`vscjava.vscode-java-pack`). Für einen Android-Emulator werden zusätzlich ein JDK 17 und Android Studio mit Android SDK Platform 35, Build Tools und einem Emulator-Image benötigt. Dieses Projekt lässt sich in VS Code bearbeiten; die Emulatorverwaltung erfolgt über Android Studio/Android SDK. Ein Build und Emulatorstart waren in der aktuellen Umgebung nicht möglich, weil weder JDK noch Android SDK/Emulator installiert sind.
+
+
+## Rechtlicher Hinweis zu externen Links
+
+Die App zeigt eigenständige Artikelalternativen und verlinkt zur Originalquelle; sie darf Paywalls weder umgehen noch geschützte Volltexte übernehmen. Eine Verlinkung ist nicht automatisch haftungsfrei: Nach der Rechtsprechung des EuGH kann es darauf ankommen, ob der Anbieter wusste oder hätte wissen müssen, dass das verlinkte Werk rechtswidrig veröffentlicht wurde; bei gewinnorientierter Verlinkung kann Kenntnis vermutet werden. Deshalb enthält die App einen Hinweis, dass sie nur technische Zugriffssignale prüft und die Rechteklärung beim jeweiligen Anbieter nicht ersetzt. Dieser Hinweis bietet selbst keinen Haftungsschutz. Vor Veröffentlichung sollten ein Impressum mit erreichbarer Kontaktmöglichkeit und ein Verfahren zum Prüfen und Entfernen konkreter beanstandeter Links ergänzt werden.
+
+## Play-Store-Status (26.09.2026)
+
+Noch nicht veröffentlichungsfähig: Die Android-App fragt derzeit ausschließlich `http://10.0.2.2:8765` ab, also den lokalen Entwicklungsserver des Emulators. Für Play Store braucht sie einen dauerhaft erreichbaren HTTPS-Backend-Endpunkt. Außerdem ist das aktuell angemeldete Google-Konto in Play Console noch beim Schritt zur Entwicklerkonto-Erstellung und verlangt zunächst die Aktivierung der 2-Faktor-Authentifizierung. Es liegt in diesem Projekt weder ein signiertes Android App Bundle noch eine Release-Signatur vor. Der aktuelle Target SDK ist 35; seit 31.08.2026 verlangt Google für neue Apps/API-Einreichungen mindestens API 36. Eine Veröffentlichung ist daher erst nach Backend-Hosting, API- und Release-Build-Anpassung, vollständigen Store-Angaben (unter anderem Datenschutzrichtlinie und App-Inhalt) und Einrichtung des Entwicklerkontos möglich.

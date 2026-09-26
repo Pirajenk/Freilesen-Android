@@ -408,6 +408,8 @@ private fun Reader(story: Story, onBack: () -> Unit) {
         Text("Themenübereinstimmung: ${story.score}/100", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Green)
         Spacer(Modifier.height(14.dp))
         Text("Urheberrecht beachten: Die angezeigten Treffer sind eigenständige Alternativen zum Originalartikel, keine Kopien oder wortgleichen Fassungen. Ein niedriger Score bedeutet nur eine geringere erkannte Themenüberschneidung – der Artikel kann trotzdem die gesuchten Informationen enthalten. Für den vollständigen Inhalt und Kontext öffne bitte die Originalquelle.", fontSize = 13.sp, lineHeight = 20.sp, color = Muted)
+        Spacer(Modifier.height(10.dp))
+        Text("Rechtlicher Hinweis zu externen Links: Die Artikel und ihre Inhalte stammen von den verlinkten Anbietern. Freilesen prüft technische Zugriffssignale, aber nicht, ob ein Anbieter die erforderlichen Rechte besitzt. Links auf rechtswidrig bereitgestellte Inhalte können rechtliche Verantwortung auslösen, insbesondere wenn eine Rechtsverletzung bekannt ist oder Zugangsbeschränkungen gezielt umgangen werden. Ein Hinweis in der App schließt eine mögliche Haftung nicht aus.", fontSize = 12.sp, lineHeight = 18.sp, color = Muted)
         Spacer(Modifier.height(20.dp))
         Box(Modifier.background(Green, RoundedCornerShape(10.dp)).clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(story.url))) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text("Originalquelle öffnen ↗", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
