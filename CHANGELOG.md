@@ -1,10 +1,10 @@
 # Änderungsprotokoll
 
 ## 1.0.10 — 2026-09-26
-- Englische Link-Slugs erhalten eine mehrsprachige Themenanalyse für KI-Regulierung und autonome Waffen; bloße Überschneidungen wie „Russia“ oder „global effort“ reichen dann nicht mehr als Treffer.
-- Englische und deutsche Suchläufe enthalten gezielte Begriffe für KI-Governance und autonome Waffen sowie separate Blogplattform-Suchen.
+- Jeder Artikel-Link wird dynamisch über Metadaten und Titelbegriffe analysiert; allgemeine Überschneidungen reichen nicht mehr, themenreiche Ausgangsartikel brauchen mindestens zwei inhaltliche Signale pro Treffer.
+- Deutsche, englische und Blogplattform-Suchläufe werden aus den Begriffen des jeweiligen Artikels erzeugt, statt feste Beispielthemen abzufragen.
 - 20 unabhängige Redaktionen und Autorinnen-/Autorenblogs aus Deutschland und dem englischsprachigen Raum in den Suchfeed aufgenommen; jeder einzelne Artikel wird weiterhin auf Zugriffssignale geprüft.
-- Vorschau erfolgreich mit einem englischen WaPo-Beispiellink geprüft: passender UN-Beitrag zu „killer robots“ und KI-Governance (77/100) sowie eine deutschsprachige KI-Regulierungs-Einordnung (54/100); themenfremde Russland-Sanktions-Ergebnisse werden ausgeschlossen.
+- Vorschau mit einem englischen WaPo-Beispiellink geprüft: passend waren ein Medium-Beitrag zu KI-Governance und ein UN-Beitrag zu autonomen Waffen; ein Treffer zu Russland-Sanktionen wurde durch die allgemeine Mehrfach-Signal-Regel ausgeschlossen.
 
 ## 1.0.9 — 2026-09-26
 - Allgemeine Suchen verbrauchen den Feed-Budget nicht länger mit unpassenden Standardbereichen wie Geschichte, Wissenschaft und Umwelt.

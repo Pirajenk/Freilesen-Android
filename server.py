@@ -51,7 +51,7 @@ for _source in SOURCE_CATALOG:
 STOP = set("""
 a an and are as at be been being but by can could did do does doing down during each few for from further had has have having he her here hers herself him himself his how i if in into is it its itself just me more most my myself no nor not now of off on once only or other our ours ourselves out over own same she should so some such than that the their theirs them themselves then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your yours yourself yourselves
 aber alle als also am an andere auch auf aus bei bin bis bist bitte bleiben dadurch dafür dagegen daher damit danach dann das dass dein deine dem den der des deshalb die dies diese dieser dieses doch dort du durch eigentlich ein eine einem einen einer eines einfach einmal er es etwas euer für gegen gewesen hat hatte hatten haben hier hin hinter ich ihm ihn ihre im immer in ins ist ja jeder jede jedes kann kein keine mit man mehr mein meine mich mir mit muss nach nachdem neben nein nicht nichts noch nun nur ob oder ohne sein seine selbst sich sie sind so über um und uns unser unter vom von vor war waren warum was weiter weil welcher welche welches wenn werden wie wieder wir wo zu zum zur zwischen
-artikel report story news latest update video bildplus bild de deutschland deutschlandweit interview spricht sagte sagt laut nun heute gestern wurde worden weitere thema wie geht heißt hiesige us global effort weakened
+artikel report story news latest update video bildplus bild de deutschland deutschlandweit interview spricht sagte sagt laut nun heute gestern wurde worden weitere thema wie geht heißt hiesige us global effort weakened how why what when where who which whose this that these those new latest breaking exclusive says said tells told amid over after before following reveals explains report reports according first second third wins win loss fails failed makes made remains may might could would should will chief major key big top rise rising falls fall world across source sources people people's official statement statements media press updates analysis comment opinion live watch read after amid extends move moves talks call calls
 """.split())
 # Small bilingual concept map lets German and English feeds share core ideas.
 ALIASES = {
@@ -116,6 +116,12 @@ ALIASES.update({
 })
 # Broad concepts help discovery, but cannot alone justify an alternative.
 BROAD_TOPICS = {"nazi", "family", "history", "records", "regime", "war", "politics", "government", "membership", "party_member", "worldwar2", "wehrmacht"}
+TOPIC_LABELS = {
+    "artificial_intelligence": "Künstliche Intelligenz", "ai_regulation": "KI-Regulierung", "autonomous_weapons": "Autonome Waffen",
+    "human_rights": "Menschenrechte", "worldwar2": "Zweiter Weltkrieg", "member_records": "Mitgliederkartei",
+}
+def topic_label(topic: str):
+    return TOPIC_LABELS.get(topic, topic.replace("_", " ").replace("-", " ").title())
 RELEVANT_TOPIC_PAIRS = ({"nazi", "worldwar2"}, {"nazi", "wehrmacht"}, {"nazi", "membership"}, {"nazi", "party_member"}, {"nsdap", "membership"}, {"nsdap", "party_member"}, {"nsdap", "member_records"}, {"falter", "member_records"})
 FEED_TOPIC_MAP = {
     "News": {"news", "politics", "government", "war", "world", "election", "crime", "membership", "nazi", "history"},
@@ -478,12 +484,12 @@ def search_news(meta):
         ("google_blog", or_query(en_terms) + " " + blog_sites, "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
         ("gdelt", or_query(en_terms[:10]), "all", {}),
         ("gdelt", or_query(de_terms[:10]), "all", {}),
-        # Topic-focused independent search: the broad OR query is for recall;
-        # these precise queries prevent short core topics being crowded out.
-        ("google", '"artificial intelligence" regulation OR "AI governance" OR "killer AI" OR "autonomous weapons"', "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
-        ("google", '"künstliche Intelligenz" Regulierung OR "autonome Waffen" OR "militärische KI"', "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
-        ("google_blog", '("artificial intelligence" OR "AI governance" OR "killer AI" OR "autonomous weapons") ' + blog_sites, "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
-        ("google_blog", '("künstliche Intelligenz" OR "KI-Regulierung" OR "autonome Waffen") ' + blog_sites, "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
+        # Focused general topic searches add precision without binding discovery
+        # to any subject; all query terms come from this submitted article.
+        ("google", or_query(de_terms[:6]), "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
+        ("google", or_query(en_terms[:6]), "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
+        ("google_blog", or_query(de_terms[:6]) + " " + blog_sites, "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
+        ("google_blog", or_query(en_terms[:6]) + " " + blog_sites, "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
     ]
     source_host = (urllib.parse.urlsplit(meta.get("url", "")).hostname or "").lower()
     source_title_words = set(canonical_terms(meta.get("title", "")))
@@ -505,20 +511,14 @@ def search_news(meta):
         overlap = core & result_words
         title_overlap = core & title_words
         distinctive = overlap - BROAD_TOPICS
-        # If the submitted article is specifically about AI, a match on
-        # incidental geopolitics (e.g. Russia/global effort) alone is not enough.
-        specialist_anchors = {"ai_regulation", "autonomous_weapons"}
-        source_specialist_anchors = source_title_words & specialist_anchors
-        candidate_specialist_anchors = result_words & specialist_anchors
-        # Generic AI coverage is not a match for a piece about AI weapons or
-        # rules: require at least one of the source's defining subtopics too.
-        if source_specialist_anchors and not source_specialist_anchors.intersection(candidate_specialist_anchors): return
         paired_topic = any(pair.issubset(overlap) for pair in RELEVANT_TOPIC_PAIRS)
-        # One distinctive title concept can be a legitimate lead (e.g. a
-        # named person, event, or place); sparse RSS blurbs no longer cause
-        # relevant alternatives to vanish. Broad concepts still need backup.
-        if not distinctive and not paired_topic: return
-        if not title_overlap and len(distinctive) < 2 and not paired_topic: return
+        source_specific = set(ranked) - BROAD_TOPICS
+        # A topic-heavy source requires more evidence than an incidental shared
+        # entity. A focused one-concept source may still match one strong term,
+        # while multi-topic articles need two independent subject signals.
+        required_specific = 2 if len(source_specific) >= 3 else 1
+        if len(distinctive) < required_specific and not paired_topic: return
+        if len(source_specific) >= 2 and len(distinctive) < 2 and not paired_topic: return
         paywall_marker = bool(re.search(r"bild\s*plus|bildplus|sz\s*plus|plus-abo|paywall|abo-artikel|subscription required|subscribe to read|\(\s*s\+\s*\)|(?<!\w)s\+(?!\w)", (title + " " + item.get("source", "")).lower()))
         if paywall_marker: return
         key = re.sub(r"[^a-z0-9]", "", title.lower())
@@ -530,7 +530,7 @@ def search_news(meta):
         score = min(99, round(raw_score + (100 - raw_score) * 0.08))
         if source_title_words and source_title_words == title_words: score = 100
         result_kind = item.get("sourceKind") or ("independent_blog_candidate" if provider == "google_blog" else "newsroom")
-        result = {"title":title, "description":item.get("description", "")[:360], "url":link, "source":item.get("source") or host, "lang":item.get("language", "en"), "published":item.get("published", ""), "score":score, "matchedTopics":list(overlap), "provider":provider, "sourceKind":result_kind, "sourceTopic":item.get("sourceTopic", ""), "catalogued":bool(item.get("catalogued") or provider == "google_blog")}
+        result = {"title":title, "description":item.get("description", "")[:360], "url":link, "source":item.get("source") or host, "lang":item.get("language", "en"), "published":item.get("published", ""), "score":score, "matchedTopics":[topic_label(word) for word in sorted(overlap)], "provider":provider, "sourceKind":result_kind, "sourceTopic":item.get("sourceTopic", ""), "catalogued":bool(item.get("catalogued") or provider == "google_blog")}
         current = candidates.get(key)
         if current is None or score > current["score"] or (result["catalogued"] and not current.get("catalogued")): candidates[key] = result
     def search_provider(spec):
@@ -669,7 +669,7 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 meta = read_metadata(target)
                 results, topics = search_news(meta)
-                payload = {"ok":True,"metadata":meta,"topics":topics,"results":results,"message":"" if results else "Keine passenden Artikel gefunden. Versuche es später mit mehr Kontext oder einer anderen Suchanfrage."}
+                payload = {"ok":True,"metadata":meta,"topics":[topic_label(topic) for topic in topics],"results":results,"message":"" if results else "Keine passenden Artikel gefunden. Versuche es später mit mehr Kontext oder einer anderen Suchanfrage."}
             except ValueError as e:
                 payload = {"ok":False,"error":str(e)}
             except Exception:
