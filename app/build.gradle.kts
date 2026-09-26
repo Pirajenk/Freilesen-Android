@@ -30,9 +30,20 @@ android {
         }
         release {
             // Keep project configuration and debug builds usable without a deployed backend.
-            // A real HTTPS endpoint is supplied explicitly when a production release is built.
+            // The endpoint is validated only when a release artifact is requested.
             val releaseApiBaseUrl = freilesenApiBaseUrl.ifBlank { "https://example.invalid" }
             buildConfigField("String", "API_BASE_URL", "\"${releaseApiBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name == "preReleaseBuild") {
+        doFirst {
+            val apiUri = runCatching { java.net.URI(freilesenApiBaseUrl) }.getOrNull()
+            require(apiUri != null && apiUri.scheme == "https" && !apiUri.host.isNullOrBlank() && apiUri.host != "example.invalid") {
+                "A release requires a public HTTPS backend. Set -PfreilesenApiBaseUrl=https://your-api-domain."
+            }
         }
     }
 }

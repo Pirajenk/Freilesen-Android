@@ -1,0 +1,11 @@
+.git
+.gradle
+.idea
+.vscode
+app
+build
+local.properties
+*.apk
+*.aab
+__pycache__
+*.py[cod]

@@ -24,7 +24,7 @@ Jeder Treffer trägt einen Score von 0 bis 100 mit Verlauf von Rot (niedrig) bis
 
 ## Bauen
 
-Mit Android Studio öffnen und Gradle Sync ausführen. Erforderlich sind JDK 17, Android SDK Platform 35 und ein Emulator. Für eine physische Android-Verbindung sind Serveradresse und erlaubter Host in der Android-Konfiguration anzupassen.
+Mit Android Studio öffnen und Gradle Sync ausführen. Erforderlich sind JDK 17 und Android SDK Platform 36. Für eine physische Android-Verbindung sind Serveradresse und erlaubter Host in der Android-Konfiguration anzupassen.
 
 ## Freiwillige Unterstützung
 
@@ -48,5 +48,11 @@ Die App zeigt eigenständige Artikelalternativen und verlinkt zur Originalquelle
 Noch nicht veröffentlichungsfähig: Die Play Console ist jetzt mit dem Google-Konto geöffnet, bei dem 2-Faktor-Authentifizierung aktiv ist. Für dieses Konto ist noch kein Entwicklerkonto registriert; die Registrierung verlangt die Auswahl eines Kontotyps, Entwickler-Kontaktdaten, Identitätsprüfung, Zustimmung zu den Play-Vertragsbedingungen und eine einmalige Registrierungsgebühr von 25 US-Dollar. Die Android-App benötigt außerdem einen dauerhaft erreichbaren HTTPS-Backend-Endpunkt. Es liegt in diesem Projekt weder ein signiertes Android App Bundle noch eine Release-Signatur vor. Der Target SDK wurde auf API 36 angehoben (Mindestanforderung für neue Apps ab 31.08.2026). Eine Veröffentlichung setzt Backend-Hosting, Release-Build und vollständige Store-Angaben (unter anderem Datenschutzrichtlinie und App-Inhalt) voraus.
 
 Für den Release-Build muss die Produktions-API als HTTPS-URL angegeben werden, zum Beispiel `-PfreilesenApiBaseUrl=https://<eigene-api-domain>`. Der Debug-Build bleibt auf den lokalen Android-Emulator-Endpunkt eingestellt. Release-Builds ohne HTTPS-API werden absichtlich abgebrochen. Das Projekt zielt jetzt auf API 36 und verwendet Android Gradle Plugin 8.9.1 gemäß Android-16-SDK-Voraussetzung. Der Kaffeetipp ist als freiwilliger Beitrag ohne Zusatzfunktion oder freigeschaltete Inhalte formuliert; Google Play behandelt solche Zahlungen als direkte Tipp-Zahlung, wenn der volle Beitrag dem Creator zugutekommt.
+
+### Eigenes NAS (UGREEN / Docker)
+
+Im Projekt liegen ein `Dockerfile` und `docker-compose.yml` für den Python-Suchdienst. Der Container läuft ohne Root-Rechte, mit schreibgeschütztem Dateisystem und Ressourcenlimits. Port 8765 wird nur an `127.0.0.1` des NAS gebunden; der Suchdienst ist damit nicht direkt aus dem Internet erreichbar. In UGREEN Container Manager kann ein Projekt aus diesen Dateien gestartet werden. Danach lässt sich die Erreichbarkeit lokal über `/healthz` prüfen.
+
+Für eine öffentliche App-API braucht es zusätzlich eine eigene Domain/Subdomain, einen HTTPS-Reverse-Proxy auf dem NAS und ein Zertifikat, zum Beispiel automatisch über Let’s Encrypt. Die Router-Freigabe darf nur den Reverse-Proxy (HTTPS/443; HTTP/80 nur für Zertifikatsvalidierung/Weiterleitung) erreichen, niemals die NAS-Verwaltung. Adminzugriff bleibt im Heimnetz oder VPN. Bis Domain, Proxy und öffentliche Erreichbarkeit sicher eingerichtet und geprüft sind, darf der Android-Release-Build nicht erstellt werden. Das NAS ist ein einzelner Ausfallpunkt; Strom-, Router-, ISP- oder Geräteausfälle stoppen die Live-Suche.
 
 Für einen möglichst kostenlosen geschlossenen Test ist Render in Frankfurt mit dem Gratis-Tarif vorbereitet (`render.yaml`). Der Dienst schläft nach 15 Minuten ohne Anfragen ein und kann beim nächsten Aufruf etwa eine Minute zum Aufwachen brauchen; Render weist darauf hin, dass Gratis-Dienste für Tests und nicht für Produktions-Apps gedacht sind. Das kann den ersten Suchlauf spürbar verzögern. Für einen zuverlässigen öffentlichen Start wäre später ein dauerhaft laufender Dienst nötig; Render nennt dafür derzeit 7 US-Dollar pro Monat zuzüglich möglicher Mehrkosten für Bandbreite. Es wurde noch kein Hosting-Dienst angelegt.

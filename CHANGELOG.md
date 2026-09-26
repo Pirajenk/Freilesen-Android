@@ -79,3 +79,13 @@
 - Hinweis zu Urheberrecht, Alternativcharakter, niedrigen Scores und Originalquelle in den Lesemodus aufgenommen.
 - Score auf die zehn stärksten Themenbegriffe normalisiert und nur leicht optimistisch kalibriert; einzelne schwache Überschneidungen werden dadurch nicht stark aufgewertet.
 - Suche in beiden Sprachen auf bis zu sieben Kernbegriffe erweitert; generische Begriffe allein gelten nicht als Themenanker. Englisches „party members“ wird gezielt als politischer Begriff erkannt, nicht als allgemeines „family members“.
+# 2026-09-26
+
+## Vorbereitung für UGREEN NAS und Play-Release
+
+- Docker-Image für den Python-Suchdienst ergänzt; läuft als unprivilegierter Nutzer.
+- Compose-Betrieb auf 2 GB RAM/2 CPU begrenzt, schreibgeschütztes Root-Dateisystem, keine Linux-Capabilities und begrenzte Logs.
+- API-Port 8765 standardmäßig nur an die NAS-Loopback-Adresse gebunden; dadurch keine versehentliche direkte Internetfreigabe.
+- Release-Build verlangt jetzt eine gültige HTTPS-Backend-URL und verweigert Platzhalter.
+- README um NAS-Betrieb, Reverse-Proxy/TLS-Voraussetzungen und Einzelserver-Ausfallrisiko ergänzt.
+- Noch nicht am NAS installiert oder öffentlich freigeschaltet: NAS-Anmeldung, Domain/DNS, Reverse-Proxy/Zertifikat und Routerfreigaben sind erforderlich. Keine Zugangsdaten oder Schlüssel ins Repository aufgenommen.
