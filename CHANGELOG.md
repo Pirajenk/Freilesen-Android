@@ -31,3 +31,12 @@
 - Vorschau und Android zeigen freie Zugänglichkeit erst nach dieser Prüfung an.
 - Merkliste um lokal persistente Themenordner erweitert; Artikel können aus Treffern in Ordner gespeichert, geöffnet und entfernt werden.
 - Datenschutzfreundliche Persistenz: Ordner und Artikelmetadaten bleiben lokal auf dem Gerät bzw. im Browser.
+
+## 1.0.4 — 2026-09-26
+- Suchanfragen verwenden alternative Themenbegriffe statt alle Hauptbegriffe zwingend zu verlangen; ein relevanter Themenanker reicht für einen Kandidaten.
+- Die Live-Zugriffsprüfung unterscheidet bestätigten freien Zugriff von wahrscheinlich freiem Zugriff und schließt klare Paywall-Signale weiterhin aus.
+- Unsichere Zugänglichkeit wird in Trefferkarte und Lesemodus ausdrücklich markiert.
+- Die Suche prüft mehr Kandidaten parallel, um trotz Verlagssperren/uneindeutiger Seiten passende offene Alternativen zu finden.
+- Kandidaten benötigen wieder mindestens zwei gemeinsame Themenbegriffe; klare S+-Treffer und inhaltlich nur zufällig überlappende Headlines werden so herausgefiltert.
+- Hinweis zu Urheberrecht, Alternativcharakter, niedrigen Scores und Originalquelle in den Lesemodus aufgenommen.
+- Score auf die zehn stärksten Themenbegriffe normalisiert und nur leicht optimistisch kalibriert; einzelne schwache Überschneidungen werden dadurch nicht stark aufgewertet.

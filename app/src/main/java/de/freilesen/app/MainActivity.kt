@@ -50,7 +50,8 @@ private data class Story(
     val language: String,
     val published: String = "",
     val score: Int = 0,
-    val access: String = ""
+    val access: String = "",
+    val commonTopics: String = ""
 )
 
 private data class SearchResponse(
@@ -87,7 +88,8 @@ private suspend fun findArticles(articleUrl: String): SearchResponse = withConte
                     language = item.optString("lang", "de"),
                     published = item.optString("published", ""),
                     score = item.optInt("score", 0).coerceIn(0, 100),
-                    access = item.optString("access", "")
+                    access = item.optString("access", ""),
+                    commonTopics = item.optJSONArray("matchedTopics")?.let { a -> (0 until a.length()).take(4).joinToString(" · ") { a.optString(it) } } ?: ""
                 ))
             }
         }
@@ -97,7 +99,7 @@ private suspend fun findArticles(articleUrl: String): SearchResponse = withConte
             metadataPublisher = meta.optString("publisher", ""),
             metadataPublished = meta.optString("published", ""),
             topics = (json.optJSONArray("topics")?.let { a -> (0 until a.length()).joinToString(" · ") { a.optString(it) } } ?: ""),
-            results = results.filter { it.access == "verified_free" },
+            results = results.filter { it.access != "paywall" && it.access != "unavailable" },
             message = json.optString("message", "")
         )
     } finally {
@@ -131,7 +133,7 @@ private fun FreilesenApp() {
     val scope = rememberCoroutineScope()
     val libraryPrefs = remember { context.getSharedPreferences("freilesen-library", android.content.Context.MODE_PRIVATE) }
     var folders by remember { mutableStateOf(runCatching { val a=JSONArray(libraryPrefs.getString("folders", "[\"Allgemein\"]")); (0 until a.length()).map { a.getString(it) } }.getOrDefault(listOf("Allgemein"))) }
-    var savedStories by remember { mutableStateOf(runCatching { val a=JSONArray(libraryPrefs.getString("bookmarks", "[]")); (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o -> Story(o.optString("source"), o.optString("title"), o.optString("detail"), o.optString("url"), o.optString("language"), o.optString("published"), o.optInt("score"), o.optString("access")) to o.optString("folder", "Allgemein") } } }.getOrDefault(emptyList())) }
+    var savedStories by remember { mutableStateOf(runCatching { val a=JSONArray(libraryPrefs.getString("bookmarks", "[]")); (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o -> Story(o.optString("source"), o.optString("title"), o.optString("detail"), o.optString("url"), o.optString("language"), o.optString("published"), o.optInt("score"), o.optString("access"), o.optString("commonTopics")) to o.optString("folder", "Allgemein") } } }.getOrDefault(emptyList())) }
     var showFolderDialog by remember { mutableStateOf(false) }
     var folderName by remember { mutableStateOf("") }
     var storyToSave by remember { mutableStateOf<Story?>(null) }
@@ -139,7 +141,7 @@ private fun FreilesenApp() {
     var currentFolder by remember { mutableStateOf("Allgemein") }
     fun persistLibrary() {
         val fs = JSONArray().apply { folders.forEach { put(it) } }
-        val bs = JSONArray().apply { savedStories.forEach { (s,f) -> put(JSONObject().put("source",s.source).put("title",s.title).put("detail",s.detail).put("url",s.url).put("language",s.language).put("published",s.published).put("score",s.score).put("access",s.access).put("folder",f)) } }
+        val bs = JSONArray().apply { savedStories.forEach { (s,f) -> put(JSONObject().put("source",s.source).put("title",s.title).put("detail",s.detail).put("url",s.url).put("language",s.language).put("published",s.published).put("score",s.score).put("access",s.access).put("commonTopics",s.commonTopics).put("folder",f)) } }
         libraryPrefs.edit().putString("folders",fs.toString()).putString("bookmarks",bs.toString()).apply()
     }
 
@@ -313,7 +315,7 @@ private fun BookmarkManager(folders: List<String>, saved: List<Pair<Story,String
         Spacer(Modifier.height(18.dp)); Text("$selectedFolder",fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=Ink); Spacer(Modifier.height(12.dp))
         val items=saved.filter{it.second==selectedFolder}
         if(items.isEmpty()) Text("In diesem Ordner sind noch keine Artikel. Speichere einen Treffer über das Lesezeichen-Symbol.",Modifier.padding(vertical=10.dp),fontSize=13.sp,lineHeight=20.sp,color=Muted)
-        items.forEach { (story,folder) -> Column(Modifier.fillMaxWidth().padding(bottom=10.dp).background(Color.White,RoundedCornerShape(14.dp)).clickable { onOpen(story,folder) }.padding(15.dp)){Text(story.source.uppercase(),fontSize=9.sp,letterSpacing=1.sp,color=Green,fontWeight=FontWeight.Bold);Spacer(Modifier.height(6.dp));Text(story.title,fontSize=16.sp,lineHeight=21.sp,fontWeight=FontWeight.SemiBold,color=Ink);Spacer(Modifier.height(8.dp));Row(verticalAlignment=Alignment.CenterVertically){Text("${story.score}/100 · frei geprüft",Modifier.weight(1f),fontSize=11.sp,color=Muted);TextButton(onClick={onRemove(story)}){Text("Entfernen",color=Muted)}}} }
+        items.forEach { (story,folder) -> Column(Modifier.fillMaxWidth().padding(bottom=10.dp).background(Color.White,RoundedCornerShape(14.dp)).clickable { onOpen(story,folder) }.padding(15.dp)){Text(story.source.uppercase(),fontSize=9.sp,letterSpacing=1.sp,color=Green,fontWeight=FontWeight.Bold);Spacer(Modifier.height(6.dp));Text(story.title,fontSize=16.sp,lineHeight=21.sp,fontWeight=FontWeight.SemiBold,color=Ink);Spacer(Modifier.height(8.dp));Row(verticalAlignment=Alignment.CenterVertically){Text("${story.score}/100 · ${when (story.access) { "verified_free" -> "frei geprüft"; "likely_free" -> "wahrscheinlich frei"; else -> "möglicherweise frei" }}",Modifier.weight(1f),fontSize=11.sp,color=Muted);TextButton(onClick={onRemove(story)}){Text("Entfernen",color=Muted)}}} }
     }
 }
 
@@ -331,7 +333,7 @@ private fun StoryCard(story: Story, isSaved: Boolean, onSave: () -> Unit, onClic
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("FREI GEPRÜFT · THEMENMATCH", fontSize = 9.sp, letterSpacing = 1.2.sp, color = Green, fontWeight = FontWeight.Bold)
+                    Text((when (story.access) { "verified_free" -> "FREI GEPRÜFT"; "likely_free" -> "WAHRSCHEINLICH FREI"; else -> "MÖGLICHERWEISE FREI" }) + " · THEMENMATCH", fontSize = 9.sp, letterSpacing = 1.1.sp, color = Green, fontWeight = FontWeight.Bold)
                     Text(story.source, fontSize = 11.sp, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -341,6 +343,10 @@ private fun StoryCard(story: Story, isSaved: Boolean, onSave: () -> Unit, onClic
             if (story.detail.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
                 Text(story.detail, fontSize = 13.sp, lineHeight = 19.sp, color = Muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            }
+            if (story.commonTopics.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text("Gemeinsame Themen: ${story.commonTopics}", fontSize = 10.sp, lineHeight = 14.sp, color = Green, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -365,7 +371,7 @@ private fun Reader(story: Story, onBack: () -> Unit) {
             Text("Zurück zu den Treffern", fontSize = 13.sp, color = Green)
         }
         Spacer(Modifier.height(35.dp))
-        Text("FREI ZUGÄNGLICH GEPRÜFT  ·  ${story.source}", fontSize = 10.sp, letterSpacing = 1.2.sp, color = Green, fontWeight = FontWeight.Bold)
+        Text((when (story.access) { "verified_free" -> "FREI ZUGÄNGLICH GEPRÜFT"; "likely_free" -> "ZUGRIFF WAHRSCHEINLICH FREI"; else -> "ZUGRIFF MÖGLICHERWEISE FREI" }) + "  ·  ${story.source}", fontSize = 10.sp, letterSpacing = 1.1.sp, color = Green, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(18.dp))
         Text(story.title, fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.SemiBold, color = Ink)
         Spacer(Modifier.height(16.dp))
@@ -373,13 +379,17 @@ private fun Reader(story: Story, onBack: () -> Unit) {
         Spacer(Modifier.height(24.dp))
         HorizontalDivider(color = Line)
         Spacer(Modifier.height(22.dp))
-        Text("Suchtreffer · Die Zugänglichkeit kann sich ändern.", fontSize = 12.sp, color = Muted)
+        Text(when (story.access) { "verified_free" -> "Beim Verlag ohne erkannte Bezahlschranke geprüft."; "likely_free" -> "Wahrscheinlich frei: Die Seite war lesbar, ein eindeutiges Freizugriffs-Merkmal fehlte."; else -> "Möglicherweise frei: Die Seite ließ sich nicht zuverlässig prüfen; ein eindeutiger Paywall-Hinweis wurde nicht erkannt." }, fontSize = 12.sp, color = Muted)
+        Spacer(Modifier.height(5.dp))
+        Text("Der Zugriff kann sich ändern; im Zweifel zeigt die Originalseite, ob eine Paywall erscheint.", fontSize = 12.sp, color = Muted)
         Spacer(Modifier.height(30.dp))
         Text("Eine andere Perspektive zum Thema", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = Ink)
         Spacer(Modifier.height(12.dp))
-        Text("Der Score vergleicht erkannte Themen in Titel, URL und öffentlicher Beschreibung. Er ist eine Relevanzhilfe und kein Vergleich des vollständigen Artikeltexts. Öffne die Originalseite, um den Artikel zu lesen und die aktuelle Zugänglichkeit zu prüfen.", fontSize = 16.sp, lineHeight = 26.sp, color = Ink)
+        Text("Der Score vergleicht erkannte Themen in verfügbaren Metadaten und nicht den vollständigen Artikeltext.", fontSize = 16.sp, lineHeight = 26.sp, color = Ink)
         Spacer(Modifier.height(12.dp))
         Text("Themenübereinstimmung: ${story.score}/100", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Green)
+        Spacer(Modifier.height(14.dp))
+        Text("Urheberrecht beachten: Die angezeigten Treffer sind eigenständige Alternativen zum Originalartikel, keine Kopien oder wortgleichen Fassungen. Ein niedriger Score bedeutet nur eine geringere erkannte Themenüberschneidung – der Artikel kann trotzdem die gesuchten Informationen enthalten. Für den vollständigen Inhalt und Kontext öffne bitte die Originalquelle.", fontSize = 13.sp, lineHeight = 20.sp, color = Muted)
         Spacer(Modifier.height(20.dp))
         Box(Modifier.background(Green, RoundedCornerShape(10.dp)).clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(story.url))) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text("Originalquelle öffnen ↗", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
