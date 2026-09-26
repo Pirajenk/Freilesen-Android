@@ -57,6 +57,15 @@ GERMAN_INDEPENDENT = [
     ("Table.Briefings", "https://table.media/feed/"),
     ("MedWatch", "https://medwatch.de/feed/"),
 ]
+SOURCE_KIND_OVERRIDES = {
+    "Deutschlandfunk": "public_service_newsroom",
+    "Deutsche Welle": "public_service_newsroom",
+    "Tagesschau": "public_service_newsroom",
+    "heise online": "specialist_publication",
+    "Golem.de": "specialist_publication",
+    "t3n": "specialist_publication",
+    "Table.Briefings": "specialist_publication",
+}
 
 
 def get(url):
@@ -131,6 +140,9 @@ def main():
             row = normalize(row)
             selected.setdefault(row["feed"].lower(), row)
     rows = list(selected.values())[:LIMIT]
+    for row in rows:
+        if row["name"] in SOURCE_KIND_OVERRIDES:
+            row["kind"] = SOURCE_KIND_OVERRIDES[row["name"]]
     for i, row in enumerate(rows, 1):
         row["id"] = f"fs-{i:03d}"
     payload = {

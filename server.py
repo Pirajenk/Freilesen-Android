@@ -30,10 +30,28 @@ try:
     SOURCE_CATALOG = json.loads(SOURCE_CATALOG_PATH.read_text()).get("sources", [])
 except (OSError, ValueError):
     SOURCE_CATALOG = []
+try:
+    INDEPENDENT_CATALOG_PATH = ROOT / "data" / "independent_sources.json"
+    INDEPENDENT_SOURCES = json.loads(INDEPENDENT_CATALOG_PATH.read_text()).get("sources", [])
+except (OSError, ValueError):
+    INDEPENDENT_SOURCES = []
+SOURCE_CATALOG.extend(INDEPENDENT_SOURCES)
+SOURCE_KIND_OVERRIDES = {
+    "Deutschlandfunk": "public_service_newsroom",
+    "Deutsche Welle": "public_service_newsroom",
+    "Tagesschau": "public_service_newsroom",
+    "heise online": "specialist_publication",
+    "Golem.de": "specialist_publication",
+    "t3n": "specialist_publication",
+    "Table.Briefings": "specialist_publication",
+}
+for _source in SOURCE_CATALOG:
+    if _source.get("name") in SOURCE_KIND_OVERRIDES:
+        _source["kind"] = SOURCE_KIND_OVERRIDES[_source["name"]]
 STOP = set("""
 a an and are as at be been being but by can could did do does doing down during each few for from further had has have having he her here hers herself him himself his how i if in into is it its itself just me more most my myself no nor not now of off on once only or other our ours ourselves out over own same she should so some such than that the their theirs them themselves then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your yours yourself yourselves
 aber alle als also am an andere auch auf aus bei bin bis bist bitte bleiben dadurch dafür dagegen daher damit danach dann das dass dein deine dem den der des deshalb die dies diese dieser dieses doch dort du durch eigentlich ein eine einem einen einer eines einfach einmal er es etwas euer für gegen gewesen hat hatte hatten haben hier hin hinter ich ihm ihn ihre im immer in ins ist ja jeder jede jedes kann kein keine mit man mehr mein meine mich mir mit muss nach nachdem neben nein nicht nichts noch nun nur ob oder ohne sein seine selbst sich sie sind so über um und uns unser unter vom von vor war waren warum was weiter weil welcher welche welches wenn werden wie wieder wir wo zu zum zur zwischen
-artikel report story news latest update video bildplus bild de deutschland deutschlandweit interview spricht sagte sagt laut nun heute gestern wurde worden weitere thema wie geht heißt hiesige
+artikel report story news latest update video bildplus bild de deutschland deutschlandweit interview spricht sagte sagt laut nun heute gestern wurde worden weitere thema wie geht heißt hiesige us global effort weakened
 """.split())
 # Small bilingual concept map lets German and English feeds share core ideas.
 ALIASES = {
@@ -53,6 +71,49 @@ ALIASES = {
 }
 GERMAN_FOR_ENGLISH = {"india":"indien", "boy":"junge", "child":"kind", "grow":"wuchs", "poverty":"armut", "slum":"slum", "nazi":"nationalsozialismus", "nsdap":"nsdap", "membership":"mitgliedschaft", "member_records":"mitgliederkartei", "records":"akten", "family":"familie", "history":"geschichte", "legitimize":"legitimiert", "party_member":"parteigenosse", "worldwar2":"zweiter weltkrieg"}
 ENGLISH_FOR_GERMAN = {"india":"india", "boy":"boy", "child":"child", "grow":"grew", "poverty":"poverty", "slum":"slum", "nazi":"nazi", "nsdap":"nsdap", "membership":"membership", "member_records":"membership records", "records":"records", "family":"family", "history":"history", "legitimize":"legitimized", "party_member":"party member", "worldwar2":"world war ii"}
+# Common reporting beats are normalized across German and English before query
+# construction and relevance scoring. This is a compact bridge, not machine
+# translation; proper names and article metadata remain the strongest signals.
+BILINGUAL_TOPICS = {
+    "government": (("government", "governments"), ("regierung", "regierungen", "regierungspolitik")),
+    "election": (("election", "elections", "vote", "voting"), ("wahl", "wahlen", "wahlkampf", "abstimmung")),
+    "parliament": (("parliament", "parliamentary", "legislator", "lawmakers"), ("parlament", "parlamente", "abgeordnete", "gesetzgeber")),
+    "migration": (("migration", "migrant", "migrants", "immigration"), ("migration", "migrant", "migranten", "zuwanderung", "einwanderung")),
+    "refugee": (("refugee", "refugees", "asylum seeker", "asylum"), ("flüchtling", "flüchtlinge", "geflüchtete", "asyl")),
+    "war": (("war", "warfare", "conflict"), ("krieg", "kriege", "konflikt", "bewaffneter konflikt")),
+    "military": (("military", "defence", "defense", "armed forces"), ("militär", "streitkräfte", "verteidigung", "bundeswehr")),
+    "investigation": (("investigation", "investigations", "probe", "inquiry"), ("recherche", "recherchen", "untersuchung", "ermittlung")),
+    "artificial_intelligence": (("artificial intelligence", "ai", "machine learning"), ("künstliche intelligenz", "ki", "maschinelles lernen")),
+    "ai_regulation": (("ai regulation", "regulate ai", "ai governance", "artificial intelligence regulation", "govern artificial intelligence"), ("ki-regulierung", "ki regulierung", "regulierung künstlicher intelligenz", "ki-governance")),
+    "autonomous_weapons": (("killer ai", "killer robots", "autonomous weapons", "lethal autonomous weapons", "military ai", "weaponized ai"), ("killer-roboter", "autonome waffen", "tödliche autonome waffen", "militärische ki", "waffenfähige ki")),
+    "corruption": (("corruption", "bribery", "fraud"), ("korruption", "bestechung", "betrug")),
+    "police": (("police", "policing", "law enforcement"), ("polizei", "polizeiarbeit", "ermittler")),
+    "court": (("court", "courts", "trial", "lawsuit"), ("gericht", "gerichte", "prozess", "klage")),
+    "climate": (("climate", "climate change", "global warming"), ("klima", "klimawandel", "erderwärmung")),
+    "environment": (("environment", "environmental", "pollution"), ("umwelt", "umweltschutz", "verschmutzung")),
+    "energy": (("energy", "electricity", "power"), ("energie", "strom", "elektrizität")),
+    "renewable": (("renewable", "renewables", "wind power", "solar power"), ("erneuerbar", "erneuerbare", "windkraft", "solarenergie")),
+    "health": (("health", "healthcare", "medicine"), ("gesundheit", "gesundheitswesen", "medizin")),
+    "research": (("research", "study", "studies", "scientific"), ("forschung", "studie", "studien", "wissenschaftlich")),
+    "economy": (("economy", "economic", "inflation", "recession"), ("wirtschaft", "wirtschaftlich", "inflation", "rezession")),
+    "housing": (("housing", "rent", "rents", "real estate"), ("wohnen", "wohnung", "miete", "immobilien")),
+    "education": (("education", "school", "university"), ("bildung", "schule", "schulen", "universität")),
+    "human_rights": (("human rights", "civil rights", "rights"), ("menschenrechte", "grundrechte", "rechte")),
+    "democracy": (("democracy", "democratic"), ("demokratie", "demokratisch")),
+    "privacy": (("privacy", "data protection", "surveillance"), ("datenschutz", "privatsphäre", "überwachung")),
+    "journalism": (("journalism", "journalist", "media"), ("journalismus", "journalist", "medien")),
+    "disinformation": (("disinformation", "misinformation", "propaganda"), ("desinformation", "fehl-­information", "propaganda")),
+}
+for _topic, (_english_forms, _german_forms) in BILINGUAL_TOPICS.items():
+    for _word in _english_forms + _german_forms:
+        ALIASES[_word] = _topic
+    ENGLISH_FOR_GERMAN[_topic] = _english_forms[0]
+    GERMAN_FOR_ENGLISH[_topic] = _german_forms[0]
+ALIASES.update({
+    "ai":"artificial_intelligence", "artificial":"artificial_intelligence", "intelligence":"artificial_intelligence", "ki":"artificial_intelligence",
+    "regulate":"ai_regulation", "regulates":"ai_regulation", "regulation":"ai_regulation", "regulatory":"ai_regulation", "governance":"ai_regulation", "govern":"ai_regulation", "regulierung":"ai_regulation",
+    "killer":"autonomous_weapons", "robot":"autonomous_weapons", "robots":"autonomous_weapons", "autonomous":"autonomous_weapons", "weapon":"autonomous_weapons", "weapons":"autonomous_weapons", "waffen":"autonomous_weapons",
+})
 # Broad concepts help discovery, but cannot alone justify an alternative.
 BROAD_TOPICS = {"nazi", "family", "history", "records", "regime", "war", "politics", "government", "membership", "party_member", "worldwar2", "wehrmacht"}
 RELEVANT_TOPIC_PAIRS = ({"nazi", "worldwar2"}, {"nazi", "wehrmacht"}, {"nazi", "membership"}, {"nazi", "party_member"}, {"nsdap", "membership"}, {"nsdap", "party_member"}, {"nsdap", "member_records"}, {"falter", "member_records"})
@@ -134,6 +195,8 @@ def quality_signals(parser, page_url, page):
     policy_hrefs = " ".join(parser.page_hrefs).lower()
     if re.search(r"correction|errata|richtigstellung|korrektur|editorial.?standards|ethics.?policy", policy_hrefs):
         signals.append("Korrektur-/Redaktionshinweis verlinkt")
+    if re.search(r"methodology|methodik|how.?we.?report|how.?we.?verify|quellen|sources|fact.?check|verification", policy_hrefs):
+        signals.append("Methodik-/Quellenseite verlinkt")
     if re.search(r"about|imprint|impressum|transparen|masthead|funding|finanzierung|contact|kontakt|editorial.?team", policy_hrefs):
         signals.append("Transparenz-/Kontaktseite verlinkt")
     return signals
@@ -217,8 +280,10 @@ def source_categories(topic_words):
     for category, keywords in FEED_TOPIC_MAP.items():
         if topic_words & keywords:
             preferred.append(category)
-    for category in ("News", "History", "Science", "Environment"):
-        if category not in preferred: preferred.append(category)
+    # Keep a general news fallback, but do not spend most of the feed budget
+    # on unrelated default buckets such as science/history for every query.
+    if "News" not in preferred:
+        preferred.insert(0, "News")
     return preferred
 
 def feed_items(source):
@@ -266,6 +331,7 @@ def search_curated_feeds(topic_words):
         if (s.get("topic") in priorities or s.get("topic") == "Germany"
             or ("News" in priorities and s.get("topic") in NEWSROOM_REGIONS))
         and s.get("language") in ("de", "en")
+        and not re.search(r"\b(?:podcasts?|reddit|memes?|funny|music|videos?|youtube|streams?)\b", s.get("name", ""), re.I)
     ]
     by_topic = {category: {"de": [], "en": []} for category in preferred}
     for source in candidates:
@@ -277,7 +343,10 @@ def search_curated_feeds(topic_words):
         by_topic[category][source["language"]].append(source)
     for languages in by_topic.values():
         for sources in languages.values():
-            sources.sort(key=lambda s: (0 if "blog" in s.get("kind", "") else 1, s.get("name", "").lower()))
+            # Explicitly vetted independent writers and investigative outlets
+            # get sampled before the much larger generic feed dump.
+            kind_rank = {"independent_blog": 0, "independent_newsroom_or_blog": 1, "blog_or_specialist": 2, "specialist_publication": 3, "public_service_newsroom": 4, "newsroom_or_blog": 5}
+            sources.sort(key=lambda s: (kind_rank.get(s.get("kind", ""), 4), s.get("name", "").lower()))
     # Round-robin topics and languages. This keeps English and German feeds in
     # the discovery pool even when the source catalogue tags English outlets by
     # country or the incoming article is written in only one language.
@@ -311,7 +380,7 @@ def canonical_terms(text: str):
     text = re.sub(r"\b(?:zweiter\s+weltkrieg|world\s+war\s*(?:ii|2)|wwii)\b", " worldwar2 ", text, flags=re.I)
     return [canonical(t) for t in terms(text)]
 def slug_title(url: str):
-    path = urllib.parse.unquote(urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1])
+    path = urllib.parse.unquote(urllib.parse.urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1])
     path = re.sub(r"\.(html?|amp)$", "", path, flags=re.I)
     path = re.sub(r"(?:-li)?\.\d+$", "", path, flags=re.I)
     path = re.sub(r"-[a-z0-9]{5,}$", "", path, flags=re.I)
@@ -379,8 +448,6 @@ def search_news(meta):
     de_terms = list(dict.fromkeys(GERMAN_FOR_ENGLISH.get(w, w) for w in ranked[:10]))
     en_terms = list(dict.fromkeys(ENGLISH_FOR_GERMAN.get(w, w) for w in ranked[:10]))
     source_title = meta.get("title", "")[:180]
-    def or_query(words): return "(" + " OR ".join('"' + w.replace('"', '') + '"' for w in words if len(w) > 2) + ")"
-
     def detect_language(text, fallback="en"):
         """Best-effort label for short headlines; feeds/GDELT remain primary signals."""
         value = " " + re.sub(r"[^a-zäöüß]+", " ", (text or "").lower()) + " "
@@ -394,13 +461,29 @@ def search_news(meta):
             return "de" if de_hits > en_hits else "en"
         return fallback
 
+    blog_sites = "(site:substack.com OR site:medium.com OR site:ghost.io OR site:wordpress.com OR site:buttondown.email OR site:beehiiv.com OR site:write.as OR site:blogspot.com OR site:blogger.com OR site:patreon.com)"
+    # Preserve short but high-value concepts such as AI when constructing queries.
+    def or_query(words):
+        terms_for_query = [w for w in words if len(w) > 2 or w in {"ai", "ki"}]
+        return "(" + " OR ".join('"' + w.replace('"', '') + '"' for w in terms_for_query) + ")"
     queries = [
         ("google", or_query(de_terms), "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
         ("google", or_query(en_terms), "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
         ("google", source_title, "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
         ("google", source_title, "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
+        # Search self-publishing and independent blog platforms directly.
+        # This reaches far beyond the fixed RSS list, including small authors
+        # whose sites are not present in any directory.
+        ("google_blog", or_query(de_terms) + " " + blog_sites, "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
+        ("google_blog", or_query(en_terms) + " " + blog_sites, "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
         ("gdelt", or_query(en_terms[:10]), "all", {}),
         ("gdelt", or_query(de_terms[:10]), "all", {}),
+        # Topic-focused independent search: the broad OR query is for recall;
+        # these precise queries prevent short core topics being crowded out.
+        ("google", '"artificial intelligence" regulation OR "AI governance" OR "killer AI" OR "autonomous weapons"', "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
+        ("google", '"künstliche Intelligenz" Regulierung OR "autonome Waffen" OR "militärische KI"', "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
+        ("google_blog", '("artificial intelligence" OR "AI governance" OR "killer AI" OR "autonomous weapons") ' + blog_sites, "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
+        ("google_blog", '("künstliche Intelligenz" OR "KI-Regulierung" OR "autonome Waffen") ' + blog_sites, "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
     ]
     source_host = (urllib.parse.urlsplit(meta.get("url", "")).hostname or "").lower()
     source_title_words = set(canonical_terms(meta.get("title", "")))
@@ -418,10 +501,18 @@ def search_news(meta):
         text = title + " " + item.get("description", "")
         result_words = set(canonical_terms(text))
         title_words = set(canonical_terms(title))
-        core = set(ranked[:12])
+        core = set(ranked[:16])
         overlap = core & result_words
         title_overlap = core & title_words
         distinctive = overlap - BROAD_TOPICS
+        # If the submitted article is specifically about AI, a match on
+        # incidental geopolitics (e.g. Russia/global effort) alone is not enough.
+        specialist_anchors = {"ai_regulation", "autonomous_weapons"}
+        source_specialist_anchors = source_title_words & specialist_anchors
+        candidate_specialist_anchors = result_words & specialist_anchors
+        # Generic AI coverage is not a match for a piece about AI weapons or
+        # rules: require at least one of the source's defining subtopics too.
+        if source_specialist_anchors and not source_specialist_anchors.intersection(candidate_specialist_anchors): return
         paired_topic = any(pair.issubset(overlap) for pair in RELEVANT_TOPIC_PAIRS)
         # One distinctive title concept can be a legitimate lead (e.g. a
         # named person, event, or place); sparse RSS blurbs no longer cause
@@ -438,14 +529,15 @@ def search_news(meta):
             raw_score = max(raw_score, 70)
         score = min(99, round(raw_score + (100 - raw_score) * 0.08))
         if source_title_words and source_title_words == title_words: score = 100
-        result = {"title":title, "description":item.get("description", "")[:360], "url":link, "source":item.get("source") or host, "lang":item.get("language", "en"), "published":item.get("published", ""), "score":score, "matchedTopics":list(overlap), "provider":provider, "sourceKind":item.get("sourceKind", "newsroom"), "sourceTopic":item.get("sourceTopic", ""), "catalogued":bool(item.get("catalogued"))}
+        result_kind = item.get("sourceKind") or ("independent_blog_candidate" if provider == "google_blog" else "newsroom")
+        result = {"title":title, "description":item.get("description", "")[:360], "url":link, "source":item.get("source") or host, "lang":item.get("language", "en"), "published":item.get("published", ""), "score":score, "matchedTopics":list(overlap), "provider":provider, "sourceKind":result_kind, "sourceTopic":item.get("sourceTopic", ""), "catalogued":bool(item.get("catalogued") or provider == "google_blog")}
         current = candidates.get(key)
         if current is None or score > current["score"] or (result["catalogued"] and not current.get("catalogued")): candidates[key] = result
     def search_provider(spec):
         provider, query, requested_lang, extras = spec
         if not query.strip(): return provider, []
         try:
-            if provider == "google":
+            if provider in ("google", "google_blog"):
                 params = urllib.parse.urlencode({"q":query, **extras})
                 _, response = fetch("https://news.google.com/rss/search?" + params, 1_000_000, timeout=8)
                 root = ET.fromstring(response)
@@ -488,7 +580,14 @@ def search_news(meta):
     # requests are excluded; successfully opened pages without enough evidence
     # remain visible as "possibly free" so readers can verify them themselves.
     matches = {}
-    top = sorted(candidates.items(), key=lambda item: -item[1]["score"])[:48]
+    by_score = sorted(candidates.items(), key=lambda item: -item[1]["score"])
+    independent_keys = {
+        key for key, item in candidates.items()
+        if item.get("sourceKind") in ("independent_blog", "independent_newsroom_or_blog", "independent_blog_candidate", "blog_or_specialist")
+    }
+    independent_top = [item for item in by_score if item[0] in independent_keys][:24]
+    other_top = [item for item in by_score if item[0] not in independent_keys][:48 - len(independent_top)]
+    top = sorted(independent_top + other_top, key=lambda item: -item[1]["score"])
     with ThreadPoolExecutor(max_workers=24) as pool:
         checked = list(pool.map(lambda pair: verify_free_access(pair[1]["url"], source_host), top))
     access_counts = Counter(access for access, _, _ in checked)
@@ -500,7 +599,23 @@ def search_news(meta):
             matches[key] = result
     print("Zugriffsprüfung: %d Kandidaten; Zugriffsstatus %s; %d verwertbare Alternativen." % (len(candidates), dict(access_counts), len(matches)), flush=True)
     results = sorted(matches.values(), key=lambda x: (-x["score"], x["title"].lower()))
-    return results[:12], ranked
+    # Keep a result from one publisher from filling the page. Preserve each
+    # article's real topic score; this only diversifies the visible selection.
+    independent = [r for r in results if r.get("sourceKind") in ("independent_blog", "independent_newsroom_or_blog", "independent_blog_candidate", "blog_or_specialist")]
+    newsroom = [r for r in results if r not in independent]
+    chosen = []
+    publisher_counts = Counter()
+    queues = [independent, newsroom]
+    while len(chosen) < 12 and any(queues):
+        for queue in queues:
+            while queue:
+                item = queue.pop(0)
+                host = (urllib.parse.urlsplit(item.get("url", "")).hostname or item.get("source", "")).lower().removeprefix("www.")
+                if publisher_counts[host] < 2:
+                    chosen.append(item); publisher_counts[host] += 1; break
+            if len(chosen) >= 12: break
+        queues = [q for q in queues if q]
+    return chosen, ranked
 
 class Handler(SimpleHTTPRequestHandler):
     rate_lock = threading.Lock()
@@ -598,5 +713,6 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8765"))
-    print("Freilesen-Suchdienst auf Port %d" % port, flush=True)
-    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    host = os.environ.get("HOST", "0.0.0.0")
+    print("Freilesen-Suchdienst auf %s:%d" % (host, port), flush=True)
+    ThreadingHTTPServer((host, port), Handler).serve_forever()

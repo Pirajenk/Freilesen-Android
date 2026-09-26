@@ -1,5 +1,19 @@
 # Änderungsprotokoll
 
+## 1.0.10 — 2026-09-26
+- Englische Link-Slugs erhalten eine mehrsprachige Themenanalyse für KI-Regulierung und autonome Waffen; bloße Überschneidungen wie „Russia“ oder „global effort“ reichen dann nicht mehr als Treffer.
+- Englische und deutsche Suchläufe enthalten gezielte Begriffe für KI-Governance und autonome Waffen sowie separate Blogplattform-Suchen.
+- 20 unabhängige Redaktionen und Autorinnen-/Autorenblogs aus Deutschland und dem englischsprachigen Raum in den Suchfeed aufgenommen; jeder einzelne Artikel wird weiterhin auf Zugriffssignale geprüft.
+- Vorschau erfolgreich mit einem englischen WaPo-Beispiellink geprüft: passender UN-Beitrag zu „killer robots“ und KI-Governance (77/100) sowie eine deutschsprachige KI-Regulierungs-Einordnung (54/100); themenfremde Russland-Sanktions-Ergebnisse werden ausgeschlossen.
+
+## 1.0.9 — 2026-09-26
+- Allgemeine Suchen verbrauchen den Feed-Budget nicht länger mit unpassenden Standardbereichen wie Geschichte, Wissenschaft und Umwelt.
+- 11 weitere englische und deutsche investigative, fachjournalistische und autorengeführte Feeds ergänzt; unabhängige Blogs werden vor dem breiten Verzeichnispool durchsucht.
+- Zwei thematische Suchläufe suchen zusätzlich auf Substack, Medium, Ghost, WordPress, Buttondown und beehiiv nach Beiträgen kleiner Publikationen und einzelner Autorinnen und Autoren.
+- Ergebnisse werden auf höchstens zwei Treffer pro Website begrenzt; die Auswahl lässt recherchierende unabhängige Quellen sichtbar werden, ohne deren thematischen Score künstlich anzuheben.
+- Blog-Treffer aus offenen Plattform-Suchen sind ausdrücklich als Blog-Kandidaten markiert; Artikelzugriff und sichtbare Beleg-/Transparenzhinweise werden weiterhin einzeln geprüft.
+- Artikel-URLs mit abschließendem Schrägstrich liefern jetzt weiterhin einen Themen-Fallback aus dem URL-Titel, falls die Verlagsseite keine Metadaten bereitstellt.
+
 ## 1.0.8 — 2026-09-26
 - Thematische RSS-Suche berücksichtigt jetzt auch englischsprachige Verlags- und Blogquellen, die im Katalog nach Ländern statt Themen sortiert sind.
 - Die Feed-Auswahl verteilt Suchplätze bewusst auf deutsche und englische Quellen, unabhängig von der Sprache des eingefügten Links.

@@ -345,7 +345,16 @@ private fun StoryCard(story: Story, isSaved: Boolean, onSave: () -> Unit, onClic
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text((when (story.access) { "verified_free" -> "FREI GEPRÜFT"; "likely_free" -> "WAHRSCHEINLICH FREI"; else -> "MÖGLICHERWEISE FREI" }) + if (story.catalogued) if (story.sourceKind.contains("independent")) " · UNABHÄNGIGE STIMME" else " · BLOG-/FACHFEED" else " · THEMENMATCH", fontSize = 9.sp, letterSpacing = 1.1.sp, color = Green, fontWeight = FontWeight.Bold)
+                    val sourceLabel = when (story.sourceKind) {
+                        "independent_blog_candidate" -> "BLOGKANDIDAT · QUELLENHINWEISE ANSEHEN"
+                        "independent_blog" -> "AUTORINNEN-BLOG"
+                        "independent_newsroom_or_blog" -> "UNABHÄNGIGES PROJEKT"
+                        "blog_or_specialist" -> "BLOG-/FACHFEED"
+                        "public_service_newsroom" -> "ÖFFENTLICH-RECHTLICHE REDAKTION"
+                        "specialist_publication" -> "FACHMEDIUM"
+                        else -> "THEMENMATCH"
+                    }
+                    Text((when (story.access) { "verified_free" -> "FREI GEPRÜFT"; "likely_free" -> "WAHRSCHEINLICH FREI"; else -> "MÖGLICHERWEISE FREI" }) + " · " + sourceLabel, fontSize = 9.sp, letterSpacing = 1.1.sp, color = Green, fontWeight = FontWeight.Bold)
                     Text(story.source, fontSize = 11.sp, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }

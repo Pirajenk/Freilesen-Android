@@ -9,6 +9,7 @@ WORKDIR /app
 COPY server.py ./server.py
 COPY preview/ ./preview/
 COPY data/source_catalog.json ./data/source_catalog.json
+COPY data/independent_sources.json ./data/independent_sources.json
 
 RUN adduser --system --uid 10001 --no-create-home freilesen
 USER 10001:10001
