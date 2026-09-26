@@ -68,7 +68,7 @@ private data class SearchResponse(
 )
 
 private suspend fun findArticles(articleUrl: String): SearchResponse = withContext(Dispatchers.IO) {
-    val endpoint = "http://10.0.2.2:8765/api/search?url=${Uri.encode(articleUrl)}"
+    val endpoint = "${BuildConfig.API_BASE_URL.trimEnd('/')}/api/search?url=${Uri.encode(articleUrl)}"
     val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"
         connectTimeout = 12_000

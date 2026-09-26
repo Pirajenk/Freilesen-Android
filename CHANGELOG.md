@@ -1,5 +1,11 @@
 # Änderungsprotokoll
 
+## Veröffentlichungsvorbereitung — 2026-09-26
+- Aktives Google-Konto mit eingeschalteter 2-Faktor-Authentifizierung für die Play-Console-Registrierung ausgewählt; die Einrichtung ist noch nicht abgeschlossen.
+- Android-Target-SDK und Compile-SDK auf API 36 angehoben; Android Gradle Plugin auf 8.9.1 aktualisiert.
+- API-Endpunkt konfigurierbar gemacht: Debug nutzt weiterhin den lokalen Emulator; Release erfordert eine HTTPS-Adresse und bricht ohne diese bewusst ab.
+- Noch offen: Entwicklerkonto samt Vertragsannahme/Gebühr/Identitätsprüfung, HTTPS-Hosting, signierter App-Bundle-Build und Play-Store-Angaben.
+
 ## 1.0.7 — 2026-09-26
 - Suchlogik liest Titel, URL, Open Graph, News-Schlagwörter sowie strukturierte Artikel-Tags und — wenn veröffentlicht — `articleBody` aus JSON-LD.
 - Sucht parallel mit Titel und zweisprachigen Themenformulierungen in Google News RSS und GDELT; prüft bis zu 36 passende Themenfeeds und bis zu 48 Artikelzugriffe.

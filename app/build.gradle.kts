@@ -4,9 +4,33 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-android { namespace = "de.freilesen.app"; compileSdk = 35
-    defaultConfig { applicationId = "de.freilesen.app"; minSdk = 26; targetSdk = 35; versionCode = 1; versionName = "1.0" }
-    buildFeatures { compose = true }
+val freilesenApiBaseUrl = providers.gradleProperty("freilesenApiBaseUrl").orNull.orEmpty()
+
+android {
+    namespace = "de.freilesen.app"
+    compileSdk = 36
+    defaultConfig {
+        applicationId = "de.freilesen.app"
+        minSdk = 26
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
+    }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+    buildTypes {
+        debug {
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8765\"")
+        }
+        release {
+            require(freilesenApiBaseUrl.startsWith("https://")) {
+                "Set -PfreilesenApiBaseUrl to the production HTTPS API before building a release."
+            }
+            buildConfigField("String", "API_BASE_URL", "\"${freilesenApiBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        }
+    }
 }
 
 dependencies {
