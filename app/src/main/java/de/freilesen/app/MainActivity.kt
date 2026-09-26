@@ -298,6 +298,8 @@ private fun FreilesenApp() {
                                 Text("☕  Kaffee spendieren", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                             }
                         }
+                        Spacer(Modifier.height(12.dp))
+                        Text("Quellcode und Lizenz (AGPL-3.0-only)", Modifier.clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Pirajenk/Freilesen-Android"))) }.padding(vertical = 8.dp), fontSize = 12.sp, color = Green)
                         Spacer(Modifier.height(24.dp))
                     }
                 }

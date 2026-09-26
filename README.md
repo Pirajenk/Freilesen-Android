@@ -2,6 +2,10 @@
 
 Minimalistische Android-App für frei zugängliche journalistische Perspektiven auf ein Thema.
 
+## Lizenz
+
+Freilesen ist unter der GNU Affero General Public License, Version 3.0 only (AGPL-3.0-only), lizenziert. Der vollständige Lizenztext steht in [LICENSE](LICENSE). Änderungen an einer öffentlich über ein Netzwerk angebotenen Version müssen deren Nutzern den entsprechenden Quellcode anbieten.
+
 ## Konzept
 
 Freilesen umgeht keine Paywalls, entfernt keine Bezahlschranken und extrahiert keine geschützten Artikeltexte. Ein eingefügter Link wird anhand von Seitentitel, Beschreibung, Herausgeber, Datum, Schlagwörtern und verfügbarer strukturierter Metadaten ausgewertet. Die App zeigt passende Meldungen mit Metadaten und öffnet die Originalquelle. Erkannte Paywalls und nicht erreichbare Seiten werden ausgeblendet; Seiten, die erreichbar sind, deren Zugänglichkeit sich aber nicht eindeutig prüfen lässt, erscheinen klar markiert als „möglicherweise frei“. Die Zugänglichkeit kann sich nach der Prüfung ändern.
