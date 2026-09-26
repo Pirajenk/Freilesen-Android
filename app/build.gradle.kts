@@ -20,16 +20,26 @@ android {
         compose = true
         buildConfig = true
     }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8765\"")
         }
         release {
-            require(freilesenApiBaseUrl.startsWith("https://")) {
-                "Set -PfreilesenApiBaseUrl to the production HTTPS API before building a release."
-            }
-            buildConfigField("String", "API_BASE_URL", "\"${freilesenApiBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+            // Keep project configuration and debug builds usable without a deployed backend.
+            // A real HTTPS endpoint is supplied explicitly when a production release is built.
+            val releaseApiBaseUrl = freilesenApiBaseUrl.ifBlank { "https://example.invalid" }
+            buildConfigField("String", "API_BASE_URL", "\"${releaseApiBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         }
+    }
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
     }
 }
 

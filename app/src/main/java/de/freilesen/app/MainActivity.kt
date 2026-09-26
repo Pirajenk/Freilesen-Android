@@ -318,7 +318,7 @@ private fun FreilesenApp() {
 
 @Composable
 private fun BookmarkManager(folders: List<String>, saved: List<Pair<Story,String>>, selectedFolder: String, onFolderSelect: (String)->Unit, onAddFolder: ()->Unit, onOpen: (Story,String)->Unit, onRemove: (Story)->Unit) {
-    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
         Spacer(Modifier.height(28.dp)); Text("DEINE SAMMLUNG",fontSize=10.sp,letterSpacing=2.sp,color=Green,fontWeight=FontWeight.Bold)
         Spacer(Modifier.height(8.dp)); Text("Merkliste",fontSize=32.sp,fontWeight=FontWeight.SemiBold,color=Ink)
         Spacer(Modifier.height(6.dp)); Text("Lege Themenordner an und speichere Artikel für später.",fontSize=14.sp,lineHeight=21.sp,color=Muted)
