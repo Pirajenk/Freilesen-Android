@@ -47,7 +47,8 @@ private data class Story(
     val detail: String,
     val url: String,
     val language: String,
-    val published: String = ""
+    val published: String = "",
+    val score: Int = 0
 )
 
 private data class SearchResponse(
@@ -82,7 +83,8 @@ private suspend fun findArticles(articleUrl: String): SearchResponse = withConte
                     detail = item.optString("description", ""),
                     url = item.optString("url", ""),
                     language = item.optString("lang", "de"),
-                    published = item.optString("published", "")
+                    published = item.optString("published", ""),
+                    score = item.optInt("score", 0).coerceIn(0, 100)
                 ))
             }
         }
@@ -110,6 +112,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun FreilesenApp() {
     var url by remember { mutableStateOf("") }
+    var searchGeneration by remember { mutableIntStateOf(0) }
     var selected by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableStateOf("Entdecken") }
     var languageFilter by remember { mutableStateOf("all") }
@@ -129,12 +132,14 @@ private fun FreilesenApp() {
             status = "Füge zuerst einen Artikellink ein."
             return
         }
+        val generation = ++searchGeneration
         searching = true
         results = emptyList()
         status = "Metadaten werden gelesen und passende Artikel gesucht …"
         scope.launch {
             try {
                 val response = findArticles(url.trim())
+                if (generation != searchGeneration) return@launch
                 metadataTitle = response.metadataTitle
                 metadataDescription = response.metadataDescription
                 metadataPublisher = response.metadataPublisher
@@ -143,9 +148,10 @@ private fun FreilesenApp() {
                 results = response.results
                 status = response.message.ifBlank { if (results.isEmpty()) "Keine ausreichend ähnlichen Artikel gefunden." else "" }
             } catch (e: Exception) {
+                if (generation != searchGeneration) return@launch
                 status = e.message ?: "Suche nicht erreichbar. Starte den lokalen Vorschau-Server und versuche es erneut."
             } finally {
-                searching = false
+                if (generation == searchGeneration) searching = false
             }
         }
     }
@@ -182,7 +188,14 @@ private fun FreilesenApp() {
                             Icon(Icons.Rounded.Link, null, tint = Muted, modifier = Modifier.padding(horizontal = 9.dp))
                             BasicTextField(
                                 value = url,
-                                onValueChange = { url = it },
+                                onValueChange = { next ->
+                                    url = next
+                                    if (searching || results.isNotEmpty() || metadataTitle.isNotBlank()) {
+                                        searchGeneration++
+                                        results = emptyList(); metadataTitle = ""; metadataDescription = ""; metadataPublisher = ""; metadataPublished = ""; topics = ""
+                                        status = "Neuer Link eingegeben. Suche erneut, um passende Artikel zu laden."; searching = false
+                                    }
+                                },
                                 modifier = Modifier.weight(1f).padding(vertical = 12.dp),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -269,6 +282,9 @@ private fun FreilesenApp() {
 
 @Composable
 private fun StoryCard(story: Story, onClick: () -> Unit) {
+    val scoreHue = story.score * 1.2f
+    val scoreColor = Color.hsv(scoreHue, 0.76f, 0.72f)
+    val scoreBackground = Color.hsv(scoreHue, 0.28f, 0.98f)
     val tint = if (story.language == "de") Color(0xFFEAE5DB) else Color(0xFFE1E8E8)
     Column(Modifier.fillMaxWidth().padding(bottom = 11.dp).background(Color.White, RoundedCornerShape(15.dp)).border(1.dp, Line, RoundedCornerShape(15.dp)).clickable(onClick = onClick)) {
         Box(Modifier.fillMaxWidth().height(82.dp).background(tint, RoundedCornerShape(topStart = 15.dp, topEnd = 15.dp)), contentAlignment = Alignment.CenterStart) {
@@ -291,8 +307,9 @@ private fun StoryCard(story: Story, onClick: () -> Unit) {
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text((if (story.language == "de") "DEUTSCH" else "ENGLISH") + if (story.published.isNotBlank()) " · ${story.published}" else "", fontSize = 9.sp, letterSpacing = 1.sp, color = Muted)
-                Spacer(Modifier.weight(1f))
+                Text((if (story.language == "de") "DEUTSCH" else "ENGLISH") + if (story.published.isNotBlank()) " · ${story.published}" else "", fontSize = 9.sp, letterSpacing = 1.sp, color = Muted, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Box(Modifier.background(scoreBackground, RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 6.dp)) { Text("${story.score}/100", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = scoreColor) }
+                Spacer(Modifier.width(8.dp))
                 Icon(Icons.Rounded.BookmarkBorder, null, tint = Muted, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(10.dp))
                 Icon(Icons.Rounded.ArrowForward, null, tint = Green, modifier = Modifier.size(18.dp))
@@ -323,7 +340,9 @@ private fun Reader(story: Story, onBack: () -> Unit) {
         Spacer(Modifier.height(30.dp))
         Text("Eine andere Perspektive zum Thema", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = Ink)
         Spacer(Modifier.height(12.dp))
-        Text("Hier werden nur die öffentlich bereitgestellten Metadaten angezeigt. Öffne die Originalseite, um den Artikel zu lesen und die aktuelle Zugänglichkeit zu prüfen.", fontSize = 16.sp, lineHeight = 26.sp, color = Ink)
+        Text("Der Score vergleicht erkannte Themen in Titel, URL und öffentlicher Beschreibung. Er ist eine Relevanzhilfe und kein Vergleich des vollständigen Artikeltexts. Öffne die Originalseite, um den Artikel zu lesen und die aktuelle Zugänglichkeit zu prüfen.", fontSize = 16.sp, lineHeight = 26.sp, color = Ink)
+        Spacer(Modifier.height(12.dp))
+        Text("Themenübereinstimmung: ${story.score}/100", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Green)
         Spacer(Modifier.height(20.dp))
         Box(Modifier.background(Green, RoundedCornerShape(10.dp)).clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(story.url))) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text("Originalquelle öffnen ↗", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
