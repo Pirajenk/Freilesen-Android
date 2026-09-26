@@ -5,6 +5,7 @@
 - Release-Konfiguration so angepasst, dass lokale Debug-Builds ohne veröffentlichtes Backend funktionieren.
 - Java- und Kotlin-Bytecode-Ziele vereinheitlicht, damit der Build mit JDK 21 nicht an inkompatiblen JVM-Zielen scheitert.
 - Fehlerhaften `Modifier.weight`-Aufruf in der Merkliste entfernt, der außerhalb eines Compose-Layout-Scopes den Kotlin-Build verhindert hat.
+- Google-Mirror für Maven Central ergänzt, damit Abhängigkeiten auch bei nicht auflösbarem `repo.maven.apache.org` geladen werden können.
 
 ## Veröffentlichungsvorbereitung — 2026-09-26
 - Aktives Google-Konto mit eingeschalteter 2-Faktor-Authentifizierung für die Play-Console-Registrierung ausgewählt; die Einrichtung ist noch nicht abgeschlossen.
