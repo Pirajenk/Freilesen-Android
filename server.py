@@ -41,18 +41,19 @@ ALIASES = {
     "wuchs":"grow", "aufwuchs":"grow", "wachsen":"grow", "aufwachsen":"grow", "grew":"grow", "grows":"grow", "grown":"grow", "growing":"grow",
     "armenviertel":"poverty", "armut":"poverty", "poor":"poverty", "poverty":"poverty",
     "slums":"slum", "slum":"slum", "indian":"india", "india":"india",
-    "nazi":"nazi", "nazis":"nazi", "nationalsozialismus":"nazi", "nationalsozialistisch":"nazi", "nsdap":"nazi", "hitler":"nazi",
-    "mitgliederkartei":"membership", "mitgliedskartei":"membership", "mitgliedskarteien":"membership", "mitgliedschaft":"membership", "mitglied":"membership", "membership":"membership",
+    "nazi":"nazi", "nazis":"nazi", "nationalsozialismus":"nazi", "nationalsozialistisch":"nazi", "hitler":"nazi", "wehrmacht":"wehrmacht",
+    "nsdap":"nsdap", "mitglied":"membership", "mitgliedschaft":"membership", "membership":"membership", "member_records":"member_records",
     "kartei":"records", "karteikarte":"records", "karteikarten":"records", "akten":"records", "akte":"records", "archive":"records", "archives":"records", "archiv":"records", "archiviert":"records", "records":"records", "files":"records", "file":"records",
     "familie":"family", "familien":"family", "family":"family", "families":"family",
     "geschichte":"history", "geschichten":"history", "history":"history", "histories":"history",
     "legitimiert":"legitimize", "legitimieren":"legitimize", "legitimize":"legitimize", "legitimized":"legitimize", "legitimising":"legitimize",
     "parteigenosse":"party_member", "parteigenossen":"party_member", "party_member":"party_member", "party_members":"party_member",
 }
-GERMAN_FOR_ENGLISH = {"india":"indien", "boy":"junge", "child":"kind", "grow":"wuchs", "poverty":"armut", "slum":"slum", "nazi":"nazi", "membership":"mitgliedschaft", "records":"akten", "family":"familie", "history":"geschichte", "legitimize":"legitimiert", "party_member":"parteigenosse"}
-ENGLISH_FOR_GERMAN = {"india":"india", "boy":"boy", "child":"child", "grow":"grew", "poverty":"poverty", "slum":"slum", "nazi":"nazi", "membership":"membership", "records":"records", "family":"family", "history":"history", "legitimize":"legitimized", "party_member":"party member"}
+GERMAN_FOR_ENGLISH = {"india":"indien", "boy":"junge", "child":"kind", "grow":"wuchs", "poverty":"armut", "slum":"slum", "nazi":"nationalsozialismus", "nsdap":"nsdap", "membership":"mitgliedschaft", "member_records":"mitgliederkartei", "records":"akten", "family":"familie", "history":"geschichte", "legitimize":"legitimiert", "party_member":"parteigenosse", "worldwar2":"zweiter weltkrieg"}
+ENGLISH_FOR_GERMAN = {"india":"india", "boy":"boy", "child":"child", "grow":"grew", "poverty":"poverty", "slum":"slum", "nazi":"nazi", "nsdap":"nsdap", "membership":"membership", "member_records":"membership records", "records":"records", "family":"family", "history":"history", "legitimize":"legitimized", "party_member":"party member", "worldwar2":"world war ii"}
 # Broad concepts help discovery, but cannot alone justify an alternative.
-BROAD_TOPICS = {"nazi", "family", "history", "records", "regime", "war", "politics", "government"}
+BROAD_TOPICS = {"nazi", "family", "history", "records", "regime", "war", "politics", "government", "membership", "party_member", "worldwar2", "wehrmacht"}
+RELEVANT_TOPIC_PAIRS = ({"nazi", "worldwar2"}, {"nazi", "wehrmacht"}, {"nazi", "membership"}, {"nazi", "party_member"}, {"nsdap", "membership"}, {"nsdap", "party_member"}, {"nsdap", "member_records"}, {"falter", "member_records"})
 FEED_TOPIC_MAP = {
     "News": {"news", "politics", "government", "war", "world", "election", "crime", "membership", "nazi", "history"},
     "History": {"history", "nazi", "war", "records", "membership", "family", "archive"},
@@ -82,13 +83,14 @@ def same_publisher(host: str, source_host: str):
 
 class MetadataParser(HTMLParser):
     def __init__(self):
-        super().__init__(); self.meta = {}; self.title = ""; self.in_title = False; self.text = []; self._skip = 0; self.article_depth = 0; self.article_text = []; self.main_depth = 0; self.main_text = []; self.paywall_markup = False; self.author_present = False; self.article_hrefs = []; self.page_hrefs = []
+        super().__init__(); self.meta = {}; self.meta_values = {}; self.title = ""; self.in_title = False; self.text = []; self._skip = 0; self.article_depth = 0; self.article_text = []; self.main_depth = 0; self.main_text = []; self.paywall_markup = False; self.author_present = False; self.article_hrefs = []; self.page_hrefs = []
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         if tag == "meta":
             key = a.get("property") or a.get("name") or a.get("itemprop")
             if key and a.get("content"):
                 self.meta[key.lower()] = a["content"].strip()
+                self.meta_values.setdefault(key.lower(), []).append(a["content"].strip())
                 if key.lower() in ("author", "article:author", "parsely-author", "citation_author", "dc.creator"): self.author_present = True
         elif tag == "title": self.in_title = True
         if a.get("itemprop", "").lower() in ("author", "creator"): self.author_present = True
@@ -164,16 +166,25 @@ def verify_free_access(url: str, source_host: str = ""):
         if PAYWALL_TEXT.search(page_text) or parser.paywall_markup: return verdict("paywall", final_url)
         if re.search(r'"isaccessibleforfree"\s*:\s*true', lowered):
             return verdict("verified_free", final_url, signals)
+        structured_body = re.search(r'"articleBody"\s*:\s*"((?:\\.|[^"\\]){1200,})"', page, re.I | re.S)
+        if structured_body:
+            try:
+                if len(json.loads('"' + structured_body.group(1) + '"').strip()) >= 1200:
+                    return verdict("likely_free", final_url, signals)
+            except ValueError:
+                pass
         # A page shell, teaser, or access-denied response is not evidence of free access.
         article_text = re.sub(r"\s+", " ", " ".join(parser.article_text)).strip()
         main_text = re.sub(r"\s+", " ", " ".join(parser.main_text)).strip()
         if len(article_text) >= 1200: return verdict("likely_free", final_url, signals)
         if len(main_text) >= 1800: return verdict("likely_free", final_url, signals)
+        if len(page_text) >= 3200 and parser.meta.get("og:type", "").lower() in ("article", "newsarticle"):
+            return verdict("likely_free", final_url, signals)
         return verdict("unknown", final_url, signals)
     except urllib.error.HTTPError as e:
-        return verdict("paywall" if e.code in (401, 402, 403) else "unavailable" if e.code in (404, 410) else "unknown", url)
+        return verdict("paywall" if e.code in (401, 402, 403) else "unavailable", url)
     except Exception:
-        return verdict("unknown", url)
+        return verdict("unavailable", url)
 
 def public_url(url: str) -> str:
     p = urllib.parse.urlsplit(url)
@@ -244,24 +255,28 @@ def search_curated_feeds(topic_words):
     preferred = source_categories(topic_words)
     priorities = {category: i for i, category in enumerate(preferred)}
     language_priority = {"de": 0, "en": 1}
-    candidates = [s for s in SOURCE_CATALOG if s.get("topic") in priorities and s.get("language") in ("de", "en")]
+    candidates = [s for s in SOURCE_CATALOG if (s.get("topic") in priorities or s.get("topic") == "Germany") and s.get("language") in ("de", "en")]
     by_topic = {category: [] for category in preferred}
-    for source in candidates: by_topic[source.get("topic")].append(source)
+    for source in candidates:
+        category = source.get("topic")
+        if category not in by_topic:
+            category = "News"
+        by_topic[category].append(source)
     for sources in by_topic.values():
         sources.sort(key=lambda s: (0 if "blog" in s.get("kind", "") else 1, language_priority.get(s.get("language"), 9), s.get("name", "").lower()))
     # Round-robin topic collections so a crowded News category cannot consume
     # the entire discovery budget before independent subject blogs are searched.
     picked = []
     indexes = {category: 0 for category in preferred}
-    while len(picked) < 16:
+    while len(picked) < 36:
         added = False
         for category in preferred:
             index = indexes[category]
             if index < len(by_topic[category]):
                 picked.append(by_topic[category][index]); indexes[category] += 1; added = True
-                if len(picked) >= 16: break
+                if len(picked) >= 36: break
         if not added: break
-    with ThreadPoolExecutor(max_workers=16) as pool:
+    with ThreadPoolExecutor(max_workers=24) as pool:
         groups = list(pool.map(feed_items, picked))
     return [item for group in groups for item in group]
 
@@ -272,6 +287,10 @@ def canonical_terms(text: str):
     # Treat this unambiguous phrase as one concept without matching generic
     # "family members" or "members of the public" to political membership.
     text = re.sub(r"\bparty\s+members?\b", " party_member ", text, flags=re.I)
+    text = re.sub(r"\b(?:national\s+socialism|national\s+socialist(?:s|ic)?)\b", " nazi ", text, flags=re.I)
+    text = re.sub(r"\bnsdap[-\s](?:mitglied(?:er)?)?(?:kartei(?:en)?|datei)\b", " nsdap member_records ", text, flags=re.I)
+    text = re.sub(r"\b(?:mitglied(?:er|s)?(?:kartei(?:en)?|datei|datenbank)|membership\s+(?:card\s+)?(?:index|file|records?|database))\b", " member_records ", text, flags=re.I)
+    text = re.sub(r"\b(?:zweiter\s+weltkrieg|world\s+war\s*(?:ii|2)|wwii)\b", " worldwar2 ", text, flags=re.I)
     return [canonical(t) for t in terms(text)]
 def slug_title(url: str):
     path = urllib.parse.unquote(urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1])
@@ -287,40 +306,69 @@ def read_metadata(url: str):
         parser = MetadataParser(); parser.feed(page)
         title = parser.meta.get("og:title") or parser.meta.get("twitter:title") or parser.meta.get("headline") or parser.title.strip()
         description = parser.meta.get("og:description") or parser.meta.get("description") or parser.meta.get("twitter:description") or ""
+        keywords = []
+        for key in ("news_keywords", "keywords", "article:tag", "article:section", "parsely-tags", "sailthru.tags"):
+            for value in parser.meta_values.get(key, []):
+                keywords.extend(part.strip() for part in re.split(r"[,;|]", value) if part.strip())
+        article_body = ""
+        for match in re.finditer(r"<script[^>]+type=[\"']application/ld\+json[\"'][^>]*>(.*?)</script>", page, re.I | re.S):
+            try:
+                structured = json.loads(html.unescape(match.group(1)))
+            except (ValueError, TypeError):
+                continue
+            stack = structured if isinstance(structured, list) else [structured]
+            while stack:
+                node = stack.pop()
+                if isinstance(node, list):
+                    stack.extend(node)
+                elif isinstance(node, dict):
+                    stack.extend(value for value in node.values() if isinstance(value, (dict, list)))
+                    for field in ("keywords", "articleSection", "about", "mentions"):
+                        value = node.get(field)
+                        if isinstance(value, list):
+                            keywords.extend(str(item.get("name", "")) if isinstance(item, dict) else str(item) for item in value)
+                        elif value:
+                            keywords.extend(part.strip() for part in re.split(r"[,;|]", str(value)) if part.strip())
+                    if not title and node.get("headline"): title = str(node["headline"])
+                    if not description and node.get("description"): description = str(node["description"])
+                    if not article_body and node.get("articleBody"): article_body = str(node["articleBody"])[:5000]
         canonical_match = re.search(r'<link[^>]+rel=["\']canonical["\'][^>]+href=["\']([^"\']+)', page, re.I)
         if canonical_match: canonical_url = urllib.parse.urljoin(final, html.unescape(canonical_match.group(1)))
         snippet = re.sub(r"\s+", " ", html.unescape(description)).strip()
         if not snippet: snippet = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:320]
-        return {"url": canonical_url, "title": re.sub(r"\s+", " ", html.unescape(title)).strip() or slug_title(url), "description": snippet[:600], "publisher": parser.meta.get("og:site_name") or urllib.parse.urlsplit(final).hostname or "", "published": parser.meta.get("article:published_time") or parser.meta.get("datepublished") or parser.meta.get("date", "")}
+        keywords = list(dict.fromkeys(re.sub(r"\s+", " ", item).strip() for item in keywords if item.strip()))[:30]
+        return {"url": canonical_url, "title": re.sub(r"\s+", " ", html.unescape(title)).strip() or slug_title(url), "description": snippet[:900], "keywords": keywords, "articleBody": article_body, "publisher": parser.meta.get("og:site_name") or urllib.parse.urlsplit(final).hostname or "", "published": parser.meta.get("article:published_time") or parser.meta.get("datepublished") or parser.meta.get("date", "")}
     except Exception:
         return {"url": url, "title": slug_title(url), "description": "", "publisher": urllib.parse.urlsplit(url).hostname or "", "published": ""}
 
 def topic_weights(meta):
     weights = Counter()
-    # The headline and URL slug are strong topic evidence; description enriches context.
-    for text, weight in ((meta.get("title", ""), 5), (slug_title(meta.get("url", "")), 4), (meta.get("description", ""), 2)):
-        for word in canonical_terms(text):
-            if len(word) >= 2: weights[word] += weight
+    # Headline, publisher tags, and URL slug are strong evidence; description
+    # and the article's own structured body add important names and context.
+    for text, weight in ((meta.get("title", ""), 6), (" ".join(meta.get("keywords", [])), 5), (slug_title(meta.get("url", "")), 4), (meta.get("description", ""), 3), (meta.get("articleBody", "")[:2200], 1)):
+        counts = Counter(canonical_terms(text))
+        for word, count in counts.items():
+            if len(word) >= 2: weights[word] += weight * min(count, 2)
     return weights
 
 def search_news(meta):
     weights = topic_weights(meta)
-    if len(weights) < 2: return [], list(weights)
-    ranked = sorted(weights, key=lambda w: (-weights[w], -len(w), w))[:10]
-    # Google News is searched in both interface languages. GDELT's Doc API searches
-    # its global, multilingual news index using English-translated terms.
-    # Search with alternative phrasing so feeds don't require every extracted
-    # noun to appear verbatim. Ranking below still checks actual overlap.
-    # Use a wider concept set in both languages. The overlap checks below keep
-    # the broader discovery from admitting stories that share only generic words.
-    de_terms = list(dict.fromkeys(GERMAN_FOR_ENGLISH.get(w, w) for w in ranked[:7]))
-    en_terms = list(dict.fromkeys(ENGLISH_FOR_GERMAN.get(w, w) for w in ranked[:7]))
-    de_query = "(" + " OR ".join('"' + w + '"' for w in de_terms) + ")"
-    en_query = "(" + " OR ".join('"' + w + '"' for w in en_terms) + ")"
+    if not weights: return [], []
+    ranked = sorted(weights, key=lambda w: (-weights[w], -len(w), w))[:14]
+    # Search both language editions and send both language variants to GDELT.
+    # These independent queries run concurrently below to keep broad discovery
+    # responsive rather than adding their network time together.
+    de_terms = list(dict.fromkeys(GERMAN_FOR_ENGLISH.get(w, w) for w in ranked[:10]))
+    en_terms = list(dict.fromkeys(ENGLISH_FOR_GERMAN.get(w, w) for w in ranked[:10]))
+    source_title = meta.get("title", "")[:180]
+    def or_query(words): return "(" + " OR ".join('"' + w.replace('"', '') + '"' for w in words if len(w) > 2) + ")"
     queries = [
-        ("google", de_query, "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
-        ("google", en_query, "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
-        ("gdelt", "(" + " OR ".join('"' + w + '"' for w in en_terms[:7]) + ")", "all", {}),
+        ("google", or_query(de_terms), "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
+        ("google", or_query(en_terms), "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
+        ("google", source_title, "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
+        ("google", source_title, "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
+        ("gdelt", or_query(en_terms[:10]), "all", {}),
+        ("gdelt", or_query(de_terms[:10]), "all", {}),
     ]
     source_host = (urllib.parse.urlsplit(meta.get("url", "")).hostname or "").lower()
     source_title_words = set(canonical_terms(meta.get("title", "")))
@@ -338,23 +386,32 @@ def search_news(meta):
         text = title + " " + item.get("description", "")
         result_words = set(canonical_terms(text))
         title_words = set(canonical_terms(title))
-        core = set(ranked[:7])
+        core = set(ranked[:12])
         overlap = core & result_words
         title_overlap = core & title_words
-        if len(overlap) < 2 or not title_overlap or not (overlap - BROAD_TOPICS): return
+        distinctive = overlap - BROAD_TOPICS
+        paired_topic = any(pair.issubset(overlap) for pair in RELEVANT_TOPIC_PAIRS)
+        # One distinctive title concept can be a legitimate lead (e.g. a
+        # named person, event, or place); sparse RSS blurbs no longer cause
+        # relevant alternatives to vanish. Broad concepts still need backup.
+        if not distinctive and not paired_topic: return
+        if not title_overlap and len(distinctive) < 2 and not paired_topic: return
         paywall_marker = bool(re.search(r"bild\s*plus|bildplus|sz\s*plus|plus-abo|paywall|abo-artikel|subscription required|subscribe to read|\(\s*s\+\s*\)|(?<!\w)s\+(?!\w)", (title + " " + item.get("source", "")).lower()))
         if paywall_marker: return
         key = re.sub(r"[^a-z0-9]", "", title.lower())
         body_words = set(canonical_terms(item.get("description", "")))
-        matched_weight = sum(weights[w] * (1.0 if w in title_overlap else 0.45 if w in body_words else 0.0) for w in core_topics)
-        raw_score = min(99, round(100 * matched_weight / total_topic_weight))
+        matched_weight = sum(weights[w] * (1.0 if w in title_overlap else 0.55 if w in body_words else 0.25 if w in overlap else 0.0) for w in core_topics)
+        raw_score = min(94, round(100 * matched_weight / total_topic_weight))
+        if {"nsdap", "member_records"}.issubset(title_overlap):
+            raw_score = max(raw_score, 70)
         score = min(99, round(raw_score + (100 - raw_score) * 0.08))
         if source_title_words and source_title_words == title_words: score = 100
         result = {"title":title, "description":item.get("description", "")[:360], "url":link, "source":item.get("source") or host, "lang":item.get("language", "en"), "published":item.get("published", ""), "score":score, "matchedTopics":list(overlap), "provider":provider, "sourceKind":item.get("sourceKind", "newsroom"), "sourceTopic":item.get("sourceTopic", ""), "catalogued":bool(item.get("catalogued"))}
         current = candidates.get(key)
         if current is None or score > current["score"] or (result["catalogued"] and not current.get("catalogued")): candidates[key] = result
-    for provider, query, requested_lang, extras in queries:
-        if not query.strip(): continue
+    def search_provider(spec):
+        provider, query, requested_lang, extras = spec
+        if not query.strip(): return provider, []
         try:
             if provider == "google":
                 params = urllib.parse.urlencode({"q":query, **extras})
@@ -373,7 +430,7 @@ def search_news(meta):
                         "language":requested_lang
                     })
             else:
-                params = urllib.parse.urlencode({"query":query, "mode":"artlist", "format":"json", "maxrecords":"75", "timespan":"3months", "sort":"HybridRel"})
+                params = urllib.parse.urlencode({"query":query, "mode":"artlist", "format":"json", "maxrecords":"100", "timespan":"1year", "sort":"HybridRel"})
                 _, response = fetch("https://api.gdeltproject.org/api/v2/doc/doc?" + params, 2_000_000, timeout=8)
                 data = json.loads(response)
                 records = []
@@ -384,23 +441,32 @@ def search_news(meta):
                     else: continue
                     records.append({"title":item.get("title", "").strip(), "url":item.get("url", "").strip(), "source":item.get("domain", "").strip(), "sourceDomain":item.get("domain", "").strip(), "description":"", "published":item.get("seendate", ""), "language":lang})
         except Exception:
-            continue
-        for item in records: consider(item, provider)
-    for item in search_curated_feeds(set(ranked)):
+            records = []
+        return provider, records
+    with ThreadPoolExecutor(max_workers=len(queries) + 1) as pool:
+        jobs = [pool.submit(search_provider, spec) for spec in queries]
+        feeds_job = pool.submit(search_curated_feeds, set(ranked))
+        for job in jobs:
+            provider, records = job.result()
+            for item in records: consider(item, provider)
+        feed_records = feeds_job.result()
+    for item in feed_records:
         consider(item, "kuratiert")
-    # Check only the highest relevance candidates. Publisher markup is decisive;
-    # unknown/blocked/ambiguous pages stay hidden to avoid frustrating readers.
+    # Check only the highest relevance candidates. Explicit paywall and failed
+    # requests are excluded; successfully opened pages without enough evidence
+    # remain visible as "possibly free" so readers can verify them themselves.
     matches = {}
-    top = sorted(candidates.items(), key=lambda item: -item[1]["score"])[:24]
-    with ThreadPoolExecutor(max_workers=16) as pool:
+    top = sorted(candidates.items(), key=lambda item: -item[1]["score"])[:48]
+    with ThreadPoolExecutor(max_workers=24) as pool:
         checked = list(pool.map(lambda pair: verify_free_access(pair[1]["url"], source_host), top))
+    access_counts = Counter(access for access, _, _ in checked)
     for (key, result), (access, final_url, signals) in zip(top, checked):
-        if access in ("verified_free", "likely_free"):
+        if access in ("verified_free", "likely_free", "unknown"):
             result["access"] = access
             result["url"] = final_url
             result["qualitySignals"] = signals
             matches[key] = result
-    print("Zugriffsprüfung: %d Kandidaten, %d als frei bestätigt/lesbar gezeigt, %d wegen Paywall oder unklarem Zugriff ausgeblendet." % (len(candidates), len(matches), len(candidates) - len(matches)), flush=True)
+    print("Zugriffsprüfung: %d Kandidaten; Zugriffsstatus %s; %d verwertbare Alternativen." % (len(candidates), dict(access_counts), len(matches)), flush=True)
     results = sorted(matches.values(), key=lambda x: (-x["score"], x["title"].lower()))
     return results[:12], ranked
 

@@ -1,7 +1,14 @@
 # Änderungsprotokoll
 
+## 1.0.7 — 2026-09-26
+- Suchlogik liest Titel, URL, Open Graph, News-Schlagwörter sowie strukturierte Artikel-Tags und — wenn veröffentlicht — `articleBody` aus JSON-LD.
+- Sucht parallel mit Titel und zweisprachigen Themenformulierungen in Google News RSS und GDELT; prüft bis zu 36 passende Themenfeeds und bis zu 48 Artikelzugriffe.
+- Relevanzfilter lässt passende Artikel mit knappen Feed-Metadaten eher durch, verlangt aber weiter mindestens ein spezifisches gemeinsames Thema.
+- Erreichbare Seiten ohne eindeutigen Zugriffsstatus können als „möglicherweise frei“ erscheinen; erkannte Paywalls, gesperrte und nicht erreichbare Seiten bleiben verborgen.
+- Quellenkatalog auf 616 Feeds aus der CC0-Empfehlungssammlung erweitert.
+
 ## 1.0.6 — 2026-09-26
-- 500 Quellen- und Blog-Feeds aus einer CC0-lizenzierten Empfehlungssammlung ergänzt, plus deutschsprachige freie Redaktionen und Blogs.
+- 616 Quellen- und Blog-Feeds aus einer CC0-lizenzierten Empfehlungssammlung ergänzt, plus deutschsprachige freie Redaktionen und Blogs.
 - Themenbezogene RSS-/Atom-Feeds werden zusätzlich zu Google News und GDELT nach passenden Beiträgen durchsucht; Feed-Ergebnisse werden zeitlich begrenzt gecacht.
 - Startseite auf freie journalistische Stimmen ausgerichtet: „Wir unterstützen freien Journalismus und unabhängige Blogs.“
 - Sorgfaltshinweise zeigen nur beobachtete Signale: genannte Autorenschaft, mehrere externe Artikelquellen sowie verlinkte Korrektur-/Transparenzseiten. Keine Sterne oder unbelegten Qualitätsurteile.

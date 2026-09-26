@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build Freilesen's 500-source discovery catalogue from CC0 OPML feeds.
+"""Build Freilesen's source discovery catalogue from CC0 OPML feeds.
 
 The catalogue is for discovery only. It does not assert that every article is
 free, credible, or written by an independent journalist; access and evidence
@@ -18,7 +18,7 @@ OUT = ROOT / "data" / "source_catalog.json"
 API = "https://api.github.com/repos/plenaryapp/awesome-rss-feeds/contents/"
 RAW = "https://raw.githubusercontent.com/plenaryapp/awesome-rss-feeds/master/"
 HEADERS = {"User-Agent": "Freilesen-source-catalog-builder/1.0"}
-LIMIT = 500
+LIMIT = 1000
 
 # General topics first because they are useful as alternatives across subjects.
 CATEGORY_PRIORITY = [
@@ -120,8 +120,10 @@ def main():
         host = (urllib.parse.urlsplit(feed).hostname or "").lower()
         row = normalize({"name": name, "feed": feed, "website": "https://" + host, "language": "de", "topic": "News", "kind": "independent_newsroom_or_blog"})
         selected.setdefault(row["feed"].lower(), row)
-    # Include independent and specialist author feeds in varied topical areas.
-    for category in CATEGORY_PRIORITY:
+    # Include every maintained recommendation category so the searchable set
+    # grows beyond the first 500 feeds while retaining the curated ordering.
+    ordered_categories = CATEGORY_PRIORITY + [name.removesuffix(".opml") for name in category_files if name.removesuffix(".opml") not in CATEGORY_PRIORITY]
+    for category in ordered_categories:
         filename = category + ".opml"
         if filename not in category_files:
             continue

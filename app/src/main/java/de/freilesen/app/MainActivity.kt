@@ -105,7 +105,7 @@ private suspend fun findArticles(articleUrl: String): SearchResponse = withConte
             metadataPublisher = meta.optString("publisher", ""),
             metadataPublished = meta.optString("published", ""),
             topics = (json.optJSONArray("topics")?.let { a -> (0 until a.length()).joinToString(" · ") { a.optString(it) } } ?: ""),
-            results = results.filter { it.access == "verified_free" || it.access == "likely_free" },
+            results = results.filter { it.access == "verified_free" || it.access == "likely_free" || it.access == "unknown" },
             message = json.optString("message", "")
         )
     } finally {
