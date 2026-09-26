@@ -73,8 +73,8 @@ private suspend fun findArticles(articleUrl: String): SearchResponse = withConte
         requestMethod = "POST"
         doOutput = true
         setRequestProperty("Content-Type", "application/json; charset=utf-8")
-        connectTimeout = 12_000
-        readTimeout = 45_000
+        connectTimeout = 30_000
+        readTimeout = 90_000
     }
     try {
         connection.outputStream.use { it.write(JSONObject().put("url", articleUrl).toString().toByteArray(Charsets.UTF_8)) }

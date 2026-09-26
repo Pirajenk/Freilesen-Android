@@ -6,6 +6,7 @@
 - API-Endpunkt konfigurierbar gemacht: Debug nutzt weiterhin den lokalen Emulator; Release erfordert eine HTTPS-Adresse und bricht ohne diese bewusst ab.
 - Suchanfragen der Android-App und Vorschau auf POST umgestellt, damit eingefügte Artikel-Links nicht in der Request-URL stehen; Anfragegröße, einfache IP-Ratenbegrenzung und gleichzeitige Suchläufe begrenzt.
 - Port- und Health-Check für Render ergänzt; Render-Konfiguration vorbereitet, aber noch kein Dienst erstellt oder veröffentlicht.
+- Hosting-Vorgabe auf den kostenlosen Tarif für den geschlossenen Test umgestellt; längere Netzwerk-Zeitlimits berücksichtigen den verzögerten Kaltstart des Gratisdienstes.
 - Noch offen: Entwicklerkonto samt Vertragsannahme/Gebühr/Identitätsprüfung, HTTPS-Hosting, signierter App-Bundle-Build und Play-Store-Angaben.
 
 ## 1.0.7 — 2026-09-26
