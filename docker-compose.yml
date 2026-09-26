@@ -15,7 +15,9 @@ services:
     cap_drop:
       - ALL
     pids_limit: 128
-    mem_limit: 2g
+    # Current NAS dashboard reports only 1.8 GB available; leave headroom for
+    # the owner's existing services and keep this service modest for a beta.
+    mem_limit: 768m
     cpus: 2.0
     logging:
       driver: json-file

@@ -84,7 +84,7 @@
 ## Vorbereitung für UGREEN NAS und Play-Release
 
 - Docker-Image für den Python-Suchdienst ergänzt; läuft als unprivilegierter Nutzer.
-- Compose-Betrieb auf 2 GB RAM/2 CPU begrenzt, schreibgeschütztes Root-Dateisystem, keine Linux-Capabilities und begrenzte Logs.
+- Compose-Betrieb auf 768 MB RAM/2 CPU begrenzt (NAS-Dashboard zeigte nur 1,8 GB verfügbar), schreibgeschütztes Root-Dateisystem, keine Linux-Capabilities und begrenzte Logs.
 - API-Port 8765 standardmäßig nur an die NAS-Loopback-Adresse gebunden; dadurch keine versehentliche direkte Internetfreigabe.
 - Release-Build verlangt jetzt eine gültige HTTPS-Backend-URL und verweigert Platzhalter.
 - README um NAS-Betrieb, Reverse-Proxy/TLS-Voraussetzungen und Einzelserver-Ausfallrisiko ergänzt.
