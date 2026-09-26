@@ -75,6 +75,7 @@ FEED_TOPIC_MAP = {
     "Food": {"food", "recipe", "restaurant", "cooking", "nutrition"},
     "Travel": {"travel", "tourism", "city", "culture"},
 }
+NEWSROOM_REGIONS = {"Germany", "United States", "Canada", "United Kingdom", "Australia", "Ireland", "South Africa"}
 PUBLISHER_DOMAINS = {"sueddeutsche.de":"sueddeutsche.de", "sz.de":"sueddeutsche.de"}
 
 def same_publisher(host: str, source_host: str):
@@ -256,27 +257,42 @@ def feed_items(source):
 def search_curated_feeds(topic_words):
     preferred = source_categories(topic_words)
     priorities = {category: i for i, category in enumerate(preferred)}
-    language_priority = {"de": 0, "en": 1}
-    candidates = [s for s in SOURCE_CATALOG if (s.get("topic") in priorities or s.get("topic") == "Germany") and s.get("language") in ("de", "en")]
-    by_topic = {category: [] for category in preferred}
+    # The catalogue tags most English-language publishers by country rather
+    # than by subject. Treat those regional desks as broad news sources, then
+    # deliberately sample both languages so the input link's language does not
+    # decide which feeds are searched.
+    candidates = [
+        s for s in SOURCE_CATALOG
+        if (s.get("topic") in priorities or s.get("topic") == "Germany"
+            or ("News" in priorities and s.get("topic") in NEWSROOM_REGIONS))
+        and s.get("language") in ("de", "en")
+    ]
+    by_topic = {category: {"de": [], "en": []} for category in preferred}
     for source in candidates:
         category = source.get("topic")
+        if category in NEWSROOM_REGIONS:
+            category = "News"
         if category not in by_topic:
             category = "News"
-        by_topic[category].append(source)
-    for sources in by_topic.values():
-        sources.sort(key=lambda s: (0 if "blog" in s.get("kind", "") else 1, language_priority.get(s.get("language"), 9), s.get("name", "").lower()))
-    # Round-robin topic collections so a crowded News category cannot consume
-    # the entire discovery budget before independent subject blogs are searched.
+        by_topic[category][source["language"]].append(source)
+    for languages in by_topic.values():
+        for sources in languages.values():
+            sources.sort(key=lambda s: (0 if "blog" in s.get("kind", "") else 1, s.get("name", "").lower()))
+    # Round-robin topics and languages. This keeps English and German feeds in
+    # the discovery pool even when the source catalogue tags English outlets by
+    # country or the incoming article is written in only one language.
     picked = []
-    indexes = {category: 0 for category in preferred}
-    while len(picked) < 36:
+    indexes = {category: {"de": 0, "en": 0} for category in preferred}
+    while len(picked) < 48:
         added = False
         for category in preferred:
-            index = indexes[category]
-            if index < len(by_topic[category]):
-                picked.append(by_topic[category][index]); indexes[category] += 1; added = True
-                if len(picked) >= 36: break
+            for language in ("de", "en"):
+                index = indexes[category][language]
+                sources = by_topic[category][language]
+                if index < len(sources):
+                    picked.append(sources[index]); indexes[category][language] += 1; added = True
+                    if len(picked) >= 48: break
+            if len(picked) >= 48: break
         if not added: break
     with ThreadPoolExecutor(max_workers=24) as pool:
         groups = list(pool.map(feed_items, picked))
@@ -364,6 +380,20 @@ def search_news(meta):
     en_terms = list(dict.fromkeys(ENGLISH_FOR_GERMAN.get(w, w) for w in ranked[:10]))
     source_title = meta.get("title", "")[:180]
     def or_query(words): return "(" + " OR ".join('"' + w.replace('"', '') + '"' for w in words if len(w) > 2) + ")"
+
+    def detect_language(text, fallback="en"):
+        """Best-effort label for short headlines; feeds/GDELT remain primary signals."""
+        value = " " + re.sub(r"[^a-zäöüß]+", " ", (text or "").lower()) + " "
+        if re.search(r"[äöüß]", value):
+            return "de"
+        words = set(value.split())
+        german = {"der", "die", "das", "und", "ist", "mit", "von", "für", "im", "auf", "über", "auch", "nicht", "nach", "bei", "wird", "sind", "einer", "einem", "zum", "zur"}
+        english = {"the", "and", "is", "with", "from", "for", "in", "on", "also", "not", "after", "at", "will", "are", "has", "have", "this", "that", "their", "was"}
+        de_hits, en_hits = len(words & german), len(words & english)
+        if de_hits != en_hits and max(de_hits, en_hits) >= 1:
+            return "de" if de_hits > en_hits else "en"
+        return fallback
+
     queries = [
         ("google", or_query(de_terms), "de", {"hl":"de", "gl":"DE", "ceid":"DE:de"}),
         ("google", or_query(en_terms), "en", {"hl":"en-US", "gl":"US", "ceid":"US:en"}),
@@ -429,7 +459,7 @@ def search_news(meta):
                         "sourceDomain":urllib.parse.urlsplit(item.find("source").attrib.get("url", "")).hostname or "" if item.find("source") is not None else "",
                         "description":re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", desc))).strip(),
                         "published":item.findtext("pubDate", "").strip(),
-                        "language":requested_lang
+                        "language":detect_language(item.findtext("title", "") + " " + desc, requested_lang)
                     })
             else:
                 params = urllib.parse.urlencode({"query":query, "mode":"artlist", "format":"json", "maxrecords":"100", "timespan":"1year", "sort":"HybridRel"})

@@ -1,5 +1,11 @@
 # Änderungsprotokoll
 
+## 1.0.8 — 2026-09-26
+- Thematische RSS-Suche berücksichtigt jetzt auch englischsprachige Verlags- und Blogquellen, die im Katalog nach Ländern statt Themen sortiert sind.
+- Die Feed-Auswahl verteilt Suchplätze bewusst auf deutsche und englische Quellen, unabhängig von der Sprache des eingefügten Links.
+- Google-News-Treffer werden anhand ihrer Überschrift und Kurzbeschreibung beschriftet, damit die Sprachfilter Deutsch/English möglichst die tatsächliche Artikelsprache zeigen.
+- Versionsnummer für dieses Funktionsupdate angehoben.
+
 ## Build-/Entwicklungsumgebung — 2026-09-26
 - Gradle Wrapper 8.11.1 ergänzt, damit Builds reproduzierbar aus dem Repository starten.
 - Release-Konfiguration so angepasst, dass lokale Debug-Builds ohne veröffentlichtes Backend funktionieren.
