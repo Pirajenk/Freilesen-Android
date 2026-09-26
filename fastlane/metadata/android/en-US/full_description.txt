@@ -1,0 +1,14 @@
+Discover related reporting from newsrooms, specialist publications and independent blogs.
+
+Paste an article link. Freilesen reads available page metadata and searches news indexes, public RSS feeds and blog platforms for other articles about the same subject. German-language links can also lead to English sources, and English links can lead to German sources.
+
+• Compare related articles with a topic-overlap score.
+• Filter results by German, English or both languages.
+• Save links into your own topic folders.
+• Open the original article at its publisher.
+
+Freilesen does not bypass paywalls and does not reproduce full articles. A result is an independent perspective, not necessarily a word-for-word or complete substitute. The score compares available titles and metadata, not the full article. Access can change; unclear access is marked as uncertain and should be checked at the publisher.
+
+Searching needs an internet connection and the Freilesen search service. Article metadata is fetched by that service; topic search terms are sent to Google News RSS and GDELT. The app does not include advertising or analytics SDKs.
+
+Freilesen is free to use. An optional coffee donation link is available in the app.

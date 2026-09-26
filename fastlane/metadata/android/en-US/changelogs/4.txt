@@ -1,0 +1,1 @@
+Improved cross-language topic matching and independent blog discovery. Uncertain access is now labelled clearly.

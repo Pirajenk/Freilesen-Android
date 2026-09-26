@@ -1,0 +1,14 @@
+Finde passende Berichte von Redaktionen, Fachmedien und unabhängigen Blogs.
+
+Füge einen Artikellink ein. Freilesen liest verfügbare Seitenmetadaten und sucht in Nachrichtenindizes, öffentlichen RSS-Feeds und Blogplattformen nach weiteren Beiträgen zum Thema. Zu deutschen Artikeln können auch englische Quellen erscheinen und umgekehrt.
+
+• Vergleiche Treffer mit einem Score zur thematischen Überschneidung.
+• Filtere nach Deutsch, English oder beiden Sprachen.
+• Speichere Links in eigenen Themenordnern.
+• Öffne den Artikel direkt bei der Originalquelle.
+
+Freilesen umgeht keine Paywalls und kopiert keine vollständigen Artikel. Ein Treffer ist eine eigenständige Perspektive und nicht zwingend ein wortgleicher oder vollständiger Ersatz. Der Score vergleicht verfügbare Titel und Metadaten, nicht den vollständigen Artikeltext. Zugriff kann sich ändern; unklarer Zugriff wird gekennzeichnet und sollte beim Anbieter geprüft werden.
+
+Für die Suche braucht die App eine Internetverbindung und den Freilesen-Suchdienst. Dieser ruft Artikelmetadaten ab; Themenbegriffe werden für die Suche an Google News RSS und GDELT übermittelt. Die App enthält keine Werbe- oder Analyse-SDKs.
+
+Freilesen ist kostenlos. In der App gibt es einen freiwilligen Kaffeetipp.
