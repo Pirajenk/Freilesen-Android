@@ -8,3 +8,6 @@ __pycache__/
 *.py[cod]
 *.apk
 *.aab
+.env
+.env.*
+!.env.example

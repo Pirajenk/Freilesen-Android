@@ -1,0 +1,6 @@
+{$FREILESEN_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy freilesen-api:8765 {
+		header_up CF-Connecting-IP {http.request.remote.host}
+	}
+}
