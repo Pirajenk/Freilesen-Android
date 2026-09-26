@@ -25,3 +25,9 @@
 - Die Bewertung berücksichtigt auch schwächere Themenbegriffe aus der Beschreibung im Nenner, damit ein zufälliger Teiltreffer nicht künstlich hoch wirkt.
 - 100 Punkte sind nur für identische normalisierte Schlagwörter vorbehalten; reguläre thematische Treffer sind auf 99 begrenzt.
 - Score-Limit und Einschränkungen in README dokumentiert.
+
+## 1.0.3 — 2026-09-26
+- Suchtreffer werden live auf der Verlagsseite auf Freizugriff geprüft; erkannte Paywalls und nicht verifizierbare Seiten werden ausgeschlossen.
+- Vorschau und Android zeigen freie Zugänglichkeit erst nach dieser Prüfung an.
+- Merkliste um lokal persistente Themenordner erweitert; Artikel können aus Treffern in Ordner gespeichert, geöffnet und entfernt werden.
+- Datenschutzfreundliche Persistenz: Ordner und Artikelmetadaten bleiben lokal auf dem Gerät bzw. im Browser.

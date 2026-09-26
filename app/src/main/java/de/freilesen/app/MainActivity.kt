@@ -32,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -48,7 +49,8 @@ private data class Story(
     val url: String,
     val language: String,
     val published: String = "",
-    val score: Int = 0
+    val score: Int = 0,
+    val access: String = ""
 )
 
 private data class SearchResponse(
@@ -84,7 +86,8 @@ private suspend fun findArticles(articleUrl: String): SearchResponse = withConte
                     url = item.optString("url", ""),
                     language = item.optString("lang", "de"),
                     published = item.optString("published", ""),
-                    score = item.optInt("score", 0).coerceIn(0, 100)
+                    score = item.optInt("score", 0).coerceIn(0, 100),
+                    access = item.optString("access", "")
                 ))
             }
         }
@@ -94,7 +97,7 @@ private suspend fun findArticles(articleUrl: String): SearchResponse = withConte
             metadataPublisher = meta.optString("publisher", ""),
             metadataPublished = meta.optString("published", ""),
             topics = (json.optJSONArray("topics")?.let { a -> (0 until a.length()).joinToString(" · ") { a.optString(it) } } ?: ""),
-            results = results,
+            results = results.filter { it.access == "verified_free" },
             message = json.optString("message", "")
         )
     } finally {
@@ -126,6 +129,19 @@ private fun FreilesenApp() {
     var topics by remember { mutableStateOf("") }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val libraryPrefs = remember { context.getSharedPreferences("freilesen-library", android.content.Context.MODE_PRIVATE) }
+    var folders by remember { mutableStateOf(runCatching { val a=JSONArray(libraryPrefs.getString("folders", "[\"Allgemein\"]")); (0 until a.length()).map { a.getString(it) } }.getOrDefault(listOf("Allgemein"))) }
+    var savedStories by remember { mutableStateOf(runCatching { val a=JSONArray(libraryPrefs.getString("bookmarks", "[]")); (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o -> Story(o.optString("source"), o.optString("title"), o.optString("detail"), o.optString("url"), o.optString("language"), o.optString("published"), o.optInt("score"), o.optString("access")) to o.optString("folder", "Allgemein") } } }.getOrDefault(emptyList())) }
+    var showFolderDialog by remember { mutableStateOf(false) }
+    var folderName by remember { mutableStateOf("") }
+    var storyToSave by remember { mutableStateOf<Story?>(null) }
+    var openedSavedStory by remember { mutableStateOf<Story?>(null) }
+    var currentFolder by remember { mutableStateOf("Allgemein") }
+    fun persistLibrary() {
+        val fs = JSONArray().apply { folders.forEach { put(it) } }
+        val bs = JSONArray().apply { savedStories.forEach { (s,f) -> put(JSONObject().put("source",s.source).put("title",s.title).put("detail",s.detail).put("url",s.url).put("language",s.language).put("published",s.published).put("score",s.score).put("access",s.access).put("folder",f)) } }
+        libraryPrefs.edit().putString("folders",fs.toString()).putString("bookmarks",bs.toString()).apply()
+    }
 
     fun search() {
         if (url.isBlank()) {
@@ -173,7 +189,11 @@ private fun FreilesenApp() {
                     Text("DE  ·  EN", fontSize = 11.sp, letterSpacing = 1.sp, color = Muted)
                 }
                 HorizontalDivider(color = Line)
-                if (selected >= 0 && selected < visibleResults.size) {
+                if (tab == "Merkliste") {
+                    BookmarkManager(folders, savedStories, currentFolder, onFolderSelect = { currentFolder=it }, onAddFolder = { showFolderDialog=true }, onOpen = { story, folder -> openedSavedStory=story; currentFolder=folder; tab="Entdecken" }, onRemove = { story -> savedStories=savedStories.filterNot { it.first.url==story.url }; persistLibrary() })
+                } else if (openedSavedStory != null) {
+                    Reader(openedSavedStory!!) { openedSavedStory=null; tab="Merkliste" }
+                } else if (selected >= 0 && selected < visibleResults.size) {
                     Reader(visibleResults[selected], onBack = { selected = -1 })
                 } else {
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
@@ -248,7 +268,7 @@ private fun FreilesenApp() {
                         if (visibleResults.isEmpty()) {
                             Text(status, Modifier.fillMaxWidth().padding(vertical = 14.dp), fontSize = 13.sp, lineHeight = 19.sp, color = Muted)
                         } else {
-                            visibleResults.forEachIndexed { i, story -> StoryCard(story) { selected = i } }
+                            visibleResults.forEachIndexed { i, story -> StoryCard(story, savedStories.any { it.first.url==story.url }, { storyToSave=story }) { selected = i } }
                         }
                         Spacer(Modifier.height(14.dp))
                         Text("QUELLEN, DIE WIR MÖGEN", fontSize = 10.sp, letterSpacing = 1.5.sp, color = Muted, fontWeight = FontWeight.Bold)
@@ -269,7 +289,7 @@ private fun FreilesenApp() {
                 }
                 Row(Modifier.fillMaxWidth().background(Color.White).border(width = 1.dp, color = Line).padding(top = 10.dp, bottom = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     listOf("Entdecken", "Merkliste", "Über uns").forEach { label ->
-                        Column(Modifier.clickable { tab = label }.padding(horizontal = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(Modifier.clickable { tab = label; selected = -1 }.padding(horizontal = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(if (label == "Entdecken") "⌂" else if (label == "Merkliste") "♡" else "i", fontSize = 19.sp, color = if (tab == label) Green else Muted)
                             Text(label, fontSize = 10.sp, color = if (tab == label) Green else Muted)
                         }
@@ -277,11 +297,28 @@ private fun FreilesenApp() {
                 }
             }
         }
+        if (showFolderDialog) AlertDialog(onDismissRequest={showFolderDialog=false}, title={Text("Themenordner anlegen")}, text={OutlinedTextField(folderName,{folderName=it},label={Text("Ordnername")},singleLine=true)}, confirmButton={TextButton(onClick={val n=folderName.trim(); if(n.isNotEmpty()){if(n !in folders) folders=folders+n;currentFolder=n;storyToSave?.let { savedStories=savedStories.filterNot{entry->entry.first.url==it.url}+(it to n);storyToSave=null };persistLibrary()};folderName="";showFolderDialog=false}){Text("Anlegen")}}, dismissButton={TextButton(onClick={showFolderDialog=false}){Text("Abbrechen")}})
+        storyToSave?.let { target -> AlertDialog(onDismissRequest={storyToSave=null}, title={Text("In Themenordner speichern")}, text={Column { folders.forEach { name -> TextButton(onClick={savedStories=savedStories.filterNot{it.first.url==target.url}+(target to name);currentFolder=name;persistLibrary();storyToSave=null}){Text(name)} }; TextButton(onClick={showFolderDialog=true}){Text("＋ Neuen Ordner anlegen")}}},confirmButton={},dismissButton={TextButton(onClick={storyToSave=null}){Text("Schließen")}}) }
     }
 }
 
 @Composable
-private fun StoryCard(story: Story, onClick: () -> Unit) {
+private fun BookmarkManager(folders: List<String>, saved: List<Pair<Story,String>>, selectedFolder: String, onFolderSelect: (String)->Unit, onAddFolder: ()->Unit, onOpen: (Story,String)->Unit, onRemove: (Story)->Unit) {
+    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
+        Spacer(Modifier.height(28.dp)); Text("DEINE SAMMLUNG",fontSize=10.sp,letterSpacing=2.sp,color=Green,fontWeight=FontWeight.Bold)
+        Spacer(Modifier.height(8.dp)); Text("Merkliste",fontSize=32.sp,fontWeight=FontWeight.SemiBold,color=Ink)
+        Spacer(Modifier.height(6.dp)); Text("Lege Themenordner an und speichere Artikel für später.",fontSize=14.sp,lineHeight=21.sp,color=Muted)
+        Spacer(Modifier.height(18.dp)); Row(verticalAlignment=Alignment.CenterVertically) { Text("Ordner",fontSize=19.sp,fontWeight=FontWeight.SemiBold,color=Ink); Spacer(Modifier.weight(1f)); TextButton(onClick=onAddFolder){Text("＋ Ordner") } }
+        folders.forEach { folder -> Row(Modifier.fillMaxWidth().padding(bottom=8.dp).background(if(folder==selectedFolder) Color(0xFFE7EEE7) else Color.White,RoundedCornerShape(12.dp)).clickable { onFolderSelect(folder) }.padding(horizontal=14.dp, vertical=13.dp),verticalAlignment=Alignment.CenterVertically){Text("▤  $folder",Modifier.weight(1f),fontSize=14.sp,color=if(folder==selectedFolder) Green else Ink,fontWeight=FontWeight.Medium);Text("${saved.count{it.second==folder}}",fontSize=12.sp,color=Muted)} }
+        Spacer(Modifier.height(18.dp)); Text("$selectedFolder",fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=Ink); Spacer(Modifier.height(12.dp))
+        val items=saved.filter{it.second==selectedFolder}
+        if(items.isEmpty()) Text("In diesem Ordner sind noch keine Artikel. Speichere einen Treffer über das Lesezeichen-Symbol.",Modifier.padding(vertical=10.dp),fontSize=13.sp,lineHeight=20.sp,color=Muted)
+        items.forEach { (story,folder) -> Column(Modifier.fillMaxWidth().padding(bottom=10.dp).background(Color.White,RoundedCornerShape(14.dp)).clickable { onOpen(story,folder) }.padding(15.dp)){Text(story.source.uppercase(),fontSize=9.sp,letterSpacing=1.sp,color=Green,fontWeight=FontWeight.Bold);Spacer(Modifier.height(6.dp));Text(story.title,fontSize=16.sp,lineHeight=21.sp,fontWeight=FontWeight.SemiBold,color=Ink);Spacer(Modifier.height(8.dp));Row(verticalAlignment=Alignment.CenterVertically){Text("${story.score}/100 · frei geprüft",Modifier.weight(1f),fontSize=11.sp,color=Muted);TextButton(onClick={onRemove(story)}){Text("Entfernen",color=Muted)}}} }
+    }
+}
+
+@Composable
+private fun StoryCard(story: Story, isSaved: Boolean, onSave: () -> Unit, onClick: () -> Unit) {
     val scoreHue = story.score * 1.2f
     val scoreColor = Color.hsv(scoreHue, 0.76f, 0.72f)
     val scoreBackground = Color.hsv(scoreHue, 0.28f, 0.98f)
@@ -294,7 +331,7 @@ private fun StoryCard(story: Story, onClick: () -> Unit) {
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("THEMATISCHER TREFFER", fontSize = 9.sp, letterSpacing = 1.2.sp, color = Green, fontWeight = FontWeight.Bold)
+                    Text("FREI GEPRÜFT · THEMENMATCH", fontSize = 9.sp, letterSpacing = 1.2.sp, color = Green, fontWeight = FontWeight.Bold)
                     Text(story.source, fontSize = 11.sp, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -310,7 +347,7 @@ private fun StoryCard(story: Story, onClick: () -> Unit) {
                 Text((if (story.language == "de") "DEUTSCH" else "ENGLISH") + if (story.published.isNotBlank()) " · ${story.published}" else "", fontSize = 9.sp, letterSpacing = 1.sp, color = Muted, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Box(Modifier.background(scoreBackground, RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 6.dp)) { Text("${story.score}/100", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = scoreColor) }
                 Spacer(Modifier.width(8.dp))
-                Icon(Icons.Rounded.BookmarkBorder, null, tint = Muted, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.BookmarkBorder, "In Themenordner speichern", tint = if(isSaved) Green else Muted, modifier = Modifier.size(18.dp).clickable { onSave() })
                 Spacer(Modifier.width(10.dp))
                 Icon(Icons.Rounded.ArrowForward, null, tint = Green, modifier = Modifier.size(18.dp))
             }
@@ -328,7 +365,7 @@ private fun Reader(story: Story, onBack: () -> Unit) {
             Text("Zurück zu den Treffern", fontSize = 13.sp, color = Green)
         }
         Spacer(Modifier.height(35.dp))
-        Text("FREI LESBAR  ·  ${story.source}", fontSize = 10.sp, letterSpacing = 1.4.sp, color = Green, fontWeight = FontWeight.Bold)
+        Text("FREI ZUGÄNGLICH GEPRÜFT  ·  ${story.source}", fontSize = 10.sp, letterSpacing = 1.2.sp, color = Green, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(18.dp))
         Text(story.title, fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.SemiBold, color = Ink)
         Spacer(Modifier.height(16.dp))

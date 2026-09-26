@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -39,20 +40,47 @@ GERMAN_FOR_ENGLISH = {"india":"indien", "boy":"junge", "child":"kind", "grow":"w
 
 class MetadataParser(HTMLParser):
     def __init__(self):
-        super().__init__(); self.meta = {}; self.title = ""; self.in_title = False; self.text = []; self._skip = 0
+        super().__init__(); self.meta = {}; self.title = ""; self.in_title = False; self.text = []; self._skip = 0; self.article_depth = 0; self.article_text = []; self.paywall_markup = False
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         if tag == "meta":
             key = a.get("property") or a.get("name") or a.get("itemprop")
             if key and a.get("content"): self.meta[key.lower()] = a["content"].strip()
         elif tag == "title": self.in_title = True
+        if tag == "article": self.article_depth += 1
+        if tag in ("div", "section", "aside") and re.search(r"paywall|pay-wall|subscriber.only|premium.content|paid.content|metered.content|registration.wall", (a.get("id", "") + " " + a.get("class", "")).lower()): self.paywall_markup = True
         elif tag in ("script", "style", "nav", "header", "footer", "aside"): self._skip += 1
     def handle_endtag(self, tag):
         if tag == "title": self.in_title = False
+        if tag == "article" and self.article_depth: self.article_depth -= 1
         elif tag in ("script", "style", "nav", "header", "footer", "aside") and self._skip: self._skip -= 1
     def handle_data(self, data):
         if self.in_title: self.title += data
-        if not self._skip and data.strip(): self.text.append(data.strip())
+        if not self._skip and data.strip():
+            self.text.append(data.strip())
+            if self.article_depth: self.article_text.append(data.strip())
+
+PAYWALL_TEXT = re.compile(r"(?:subscribe\s+to\s+(?:read|continue)|subscription\s+(?:required|only)|sign\s+in\s+to\s+continue|this\s+article\s+is\s+for\s+subscribers|jetzt\s+abonnieren|abo\s+erforderlich|nur\s+für\s+abonnenten|weiterlesen\s+mit\s+(?:ihrem|deinem)\s+abo|mitgliederbereich|plus\s+freischalten|artikel\s+ist\s+kostenpflichtig|zahlungspflichtig|kostenpflichtig\s+lesen|jetzt\s+freischalten|registrieren\s+sie\s+sich.*weiterlesen)", re.I)
+
+def verify_free_access(url: str):
+    """Fail closed unless the live article page looks fully and publicly readable."""
+    try:
+        _, page = fetch(url, 1_800_000, timeout=7)
+        parser = MetadataParser(); parser.feed(page)
+        lowered = page.lower()
+        # Structured publisher signals are reliable in both directions.
+        if re.search(r'"isAccessibleForFree"\s*:\s*false|isaccessibleforfree\s*["\']?\s*content\s*=\s*["\']false', lowered):
+            return False
+        if parser.paywall_markup or PAYWALL_TEXT.search(html.unescape(" ".join(parser.text))):
+            return False
+        if re.search(r'"isAccessibleForFree"\s*:\s*true', lowered):
+            return True
+        # A 200 response and a long shell page are insufficient. Require a
+        # substantial article body, not navigation, recommendations, or teaser.
+        article_text = re.sub(r"\s+", " ", " ".join(parser.article_text)).strip()
+        return len(article_text) >= 2600
+    except Exception:
+        return False
 
 def public_url(url: str) -> str:
     p = urllib.parse.urlsplit(url)
@@ -130,6 +158,7 @@ def search_news(meta):
     # terms. Otherwise unrelated matches can score artificially high.
     total_topic_weight = sum(weights.values()) or 1
     matches = {}
+    candidates = {}
     for provider, query, requested_lang, extras in queries:
         if not query.strip(): continue
         try:
@@ -184,9 +213,20 @@ def search_news(meta):
             score = min(99, round(100 * matched_weight / total_topic_weight))
             target_title_words = set(canonical_terms(title))
             if source_title_words and source_title_words == target_title_words: score = 100
-            current = matches.get(key)
             result = {"title":title, "description":item["description"][:360], "url":link, "source":item["source"] or host, "lang":item["language"], "published":item["published"], "score":score, "matchedTopics":list(overlap), "provider":provider}
-            if current is None or score > current["score"]: matches[key] = result
+            current = candidates.get(key)
+            if current is None or score > current["score"]: candidates[key] = result
+    # Check a bounded set of highest relevance candidates against their live
+    # publisher pages. Search-index snippets and HTTP status alone don't prove
+    # that a story is free. Unknown/blocked/ambiguous pages are excluded.
+    matches = {}
+    top = sorted(candidates.items(), key=lambda item: -item[1]["score"])[:18]
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        checked = list(pool.map(lambda pair: verify_free_access(pair[1]["url"]), top))
+    for (key, result), is_free in zip(top, checked):
+        if is_free:
+            result["access"] = "verified_free"
+            matches[key] = result
     results = sorted(matches.values(), key=lambda x: (-x["score"], x["title"].lower()))
     return results[:12], ranked
 
@@ -199,7 +239,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not target: raise ValueError("Füge zuerst einen Artikellink ein.")
                 meta = read_metadata(target)
                 results, topics = search_news(meta)
-                payload = {"ok":True,"metadata":meta,"topics":topics,"results":results,"message":"" if results else "Keine ausreichend ähnlichen Artikel gefunden. Die Suche verwendet die erkannten Linkthemen; versuche es mit dem direkten Artikel-Link erneut."}
+                payload = {"ok":True,"metadata":meta,"topics":topics,"results":results,"message":"" if results else "Keine ausreichend ähnlichen Artikel mit bestätigtem freiem Zugriff gefunden. Unklare oder paywall-geschützte Seiten werden nicht angezeigt."}
             except ValueError as e: payload = {"ok":False,"error":str(e)}
             except Exception: payload = {"ok":False,"error":"Metadaten oder thematische Suche konnten gerade nicht ausgewertet werden."}
             data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
