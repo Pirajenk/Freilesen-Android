@@ -134,7 +134,11 @@ def fetch(url: str, limit: int = 1_500_000, timeout: int = 12):
 def terms(text: str):
     return [t.lower() for t in TOKEN.findall(text) if t.lower() not in STOP and not t.isdigit()]
 def canonical(token: str): return ALIASES.get(token, token)
-def canonical_terms(text: str): return [canonical(t) for t in terms(text)]
+def canonical_terms(text: str):
+    # Treat this unambiguous phrase as one concept without matching generic
+    # "family members" or "members of the public" to political membership.
+    text = re.sub(r"\bparty\s+members?\b", " party_member ", text, flags=re.I)
+    return [canonical(t) for t in terms(text)]
 def slug_title(url: str):
     path = urllib.parse.unquote(urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1])
     path = re.sub(r"\.(html?|amp)$", "", path, flags=re.I)

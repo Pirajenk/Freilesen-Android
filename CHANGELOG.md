@@ -40,3 +40,4 @@
 - Kandidaten benötigen wieder mindestens zwei gemeinsame Themenbegriffe; klare S+-Treffer und inhaltlich nur zufällig überlappende Headlines werden so herausgefiltert.
 - Hinweis zu Urheberrecht, Alternativcharakter, niedrigen Scores und Originalquelle in den Lesemodus aufgenommen.
 - Score auf die zehn stärksten Themenbegriffe normalisiert und nur leicht optimistisch kalibriert; einzelne schwache Überschneidungen werden dadurch nicht stark aufgewertet.
+- Suche in beiden Sprachen auf bis zu sieben Kernbegriffe erweitert; generische Begriffe allein gelten nicht als Themenanker. Englisches „party members“ wird gezielt als politischer Begriff erkannt, nicht als allgemeines „family members“.
