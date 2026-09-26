@@ -5,14 +5,16 @@ from __future__ import annotations
 import html
 import ipaddress
 import json
+import os
 import re
 import socket
 import time
+import threading
 import urllib.parse
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from collections import Counter
+from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -471,25 +473,100 @@ def search_news(meta):
     return results[:12], ranked
 
 class Handler(SimpleHTTPRequestHandler):
+    rate_lock = threading.Lock()
+    rate_buckets = {}
+    search_slots = threading.BoundedSemaphore(2)
+    max_request_bytes = 4096
+    rate_limit_per_minute = 10
+
     def __init__(self, *args, **kwargs): super().__init__(*args, directory=str(PREVIEW), **kwargs)
     def do_GET(self):
-        if self.path.startswith("/api/search?"):
-            params = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query); target = (params.get("url") or [""])[0]
+        if self.path == "/healthz":
+            self._json_response(200, {"ok": True})
+            return
+        if self.path == "/api/search":
+            self.send_response(405); self.send_header("Allow", "POST"); self.end_headers(); return
+        super().do_GET()
+
+    def do_POST(self):
+        if urllib.parse.urlsplit(self.path).path != "/api/search":
+            self.send_error(404)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._json_response(400, {"ok": False, "error": "Ungültige Anfrage."})
+            return
+        if length <= 0 or length > self.max_request_bytes:
+            self._json_response(413 if length > self.max_request_bytes else 400, {"ok": False, "error": "Die Anfrage ist leer oder zu groß."})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length))
+            target = payload.get("url", "") if isinstance(payload, dict) else ""
+            if not isinstance(target, str) or not target.strip():
+                raise ValueError("Füge zuerst einen Artikellink ein.")
+            if len(target) > 2048:
+                raise ValueError("Der Artikellink ist zu lang.")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self._json_response(400, {"ok": False, "error": "Ungültiges JSON."})
+            return
+        except ValueError as e:
+            self._json_response(400, {"ok": False, "error": str(e)})
+            return
+
+        if self._rate_limited():
+            self._json_response(429, {"ok": False, "error": "Zu viele Suchanfragen. Bitte warte einen Moment."})
+            return
+        if not self.search_slots.acquire(blocking=False):
+            self._json_response(503, {"ok": False, "error": "Der Suchdienst ist gerade ausgelastet. Bitte versuche es gleich erneut."})
+            return
+        try:
             try:
-                if not target: raise ValueError("Füge zuerst einen Artikellink ein.")
                 meta = read_metadata(target)
                 results, topics = search_news(meta)
                 payload = {"ok":True,"metadata":meta,"topics":topics,"results":results,"message":"" if results else "Keine passenden Artikel gefunden. Versuche es später mit mehr Kontext oder einer anderen Suchanfrage."}
-            except ValueError as e: payload = {"ok":False,"error":str(e)}
-            except Exception: payload = {"ok":False,"error":"Metadaten oder thematische Suche konnten gerade nicht ausgewertet werden."}
-            data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            self.send_response(200); self.send_header("Content-Type","application/json; charset=utf-8"); self.send_header("Content-Length",str(len(data))); self.send_header("Cache-Control","no-store"); self.end_headers(); self.wfile.write(data); return
-        super().do_GET()
+            except ValueError as e:
+                payload = {"ok":False,"error":str(e)}
+            except Exception:
+                payload = {"ok":False,"error":"Metadaten oder thematische Suche konnten gerade nicht ausgewertet werden."}
+            self._json_response(200, payload)
+        finally:
+            self.search_slots.release()
+
+    def _rate_limited(self):
+        # Render overwrites CF-Connecting-IP at its edge; never trust a generic
+        # client-supplied forwarding header for rate-limit identity.
+        client_ip = (self.headers.get("CF-Connecting-IP") or self.client_address[0]).strip()
+        now = time.monotonic()
+        with self.rate_lock:
+            bucket = self.rate_buckets.setdefault(client_ip, deque())
+            while bucket and now - bucket[0] >= 60:
+                bucket.popleft()
+            if len(bucket) >= self.rate_limit_per_minute:
+                return True
+            bucket.append(now)
+            if len(self.rate_buckets) > 4096:
+                stale = [ip for ip, requests in self.rate_buckets.items() if not requests or now - requests[-1] >= 60]
+                for ip in stale:
+                    self.rate_buckets.pop(ip, None)
+        return False
+
+    def _json_response(self, status, payload):
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
     def log_message(self, fmt, *args):
-        message = fmt % args
-        if "/api/search" in message: message = "API-Suche (Link nicht protokolliert)"
-        print("%s - %s" % (self.client_address[0], message))
+        if self.path.startswith("/api/search"):
+            print("API-Suche (Artikellink nicht protokolliert)", flush=True)
+        else:
+            print("HTTP-Anfrage an Vorschau", flush=True)
 
 if __name__ == "__main__":
-    print("Freilesen-Vorschau: http://localhost:8765 (Android-Emulator: http://10.0.2.2:8765)")
-    ThreadingHTTPServer(("0.0.0.0", 8765), Handler).serve_forever()
+    port = int(os.environ.get("PORT", "8765"))
+    print("Freilesen-Suchdienst auf Port %d" % port, flush=True)
+    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

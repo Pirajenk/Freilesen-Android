@@ -4,6 +4,8 @@
 - Aktives Google-Konto mit eingeschalteter 2-Faktor-Authentifizierung für die Play-Console-Registrierung ausgewählt; die Einrichtung ist noch nicht abgeschlossen.
 - Android-Target-SDK und Compile-SDK auf API 36 angehoben; Android Gradle Plugin auf 8.9.1 aktualisiert.
 - API-Endpunkt konfigurierbar gemacht: Debug nutzt weiterhin den lokalen Emulator; Release erfordert eine HTTPS-Adresse und bricht ohne diese bewusst ab.
+- Suchanfragen der Android-App und Vorschau auf POST umgestellt, damit eingefügte Artikel-Links nicht in der Request-URL stehen; Anfragegröße, einfache IP-Ratenbegrenzung und gleichzeitige Suchläufe begrenzt.
+- Port- und Health-Check für Render ergänzt; Render-Konfiguration vorbereitet, aber noch kein Dienst erstellt oder veröffentlicht.
 - Noch offen: Entwicklerkonto samt Vertragsannahme/Gebühr/Identitätsprüfung, HTTPS-Hosting, signierter App-Bundle-Build und Play-Store-Angaben.
 
 ## 1.0.7 — 2026-09-26

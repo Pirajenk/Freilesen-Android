@@ -68,14 +68,18 @@ private data class SearchResponse(
 )
 
 private suspend fun findArticles(articleUrl: String): SearchResponse = withContext(Dispatchers.IO) {
-    val endpoint = "${BuildConfig.API_BASE_URL.trimEnd('/')}/api/search?url=${Uri.encode(articleUrl)}"
+    val endpoint = "${BuildConfig.API_BASE_URL.trimEnd('/')}/api/search"
     val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-        requestMethod = "GET"
+        requestMethod = "POST"
+        doOutput = true
+        setRequestProperty("Content-Type", "application/json; charset=utf-8")
         connectTimeout = 12_000
         readTimeout = 45_000
     }
     try {
-        val body = connection.inputStream.bufferedReader().use { it.readText() }
+        connection.outputStream.use { it.write(JSONObject().put("url", articleUrl).toString().toByteArray(Charsets.UTF_8)) }
+        val responseStream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
+        val body = responseStream.bufferedReader().use { it.readText() }
         val json = JSONObject(body)
         if (!json.optBoolean("ok")) throw IllegalStateException(json.optString("error", "Die Suche ist fehlgeschlagen."))
         val meta = json.optJSONObject("metadata") ?: JSONObject()
