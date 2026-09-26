@@ -1,5 +1,12 @@
 # Änderungsprotokoll
 
+## 1.0.5 — 2026-09-26
+- Erkennung an Google-/Schema.org-Paywall-Markup ausgerichtet: `isAccessibleForFree`, `hasPart`, Paywall-Selektoren und Premium-/Abo-Metadaten werden als Signale gelesen.
+- Fehler in der Groß-/Kleinschreibung der JSON-LD-Erkennung behoben; strukturierte `isAccessibleForFree`-Werte werden jetzt tatsächlich erkannt.
+- Unklare, gesperrte und Paywall-markierte Kandidaten werden ausgeblendet; die Oberfläche gibt diese Unsicherheit nicht mehr als Treffer aus.
+- HTML-Prüfung auf 320 KB und fünf Sekunden begrenzt, auf zwölf relevante Kandidaten begrenzt und Ergebnisse 15 Minuten zwischengespeichert.
+- Android blendet Antworten mit unbekanntem Zugriffsstatus ebenfalls defensiv aus.
+
 ## 1.0.0 — 2026-09-26
 - Grundgerüst als Android-App mit Kotlin und Jetpack Compose angelegt.
 - Minimalistische Startansicht mit Linkfeld, Quellhinweis, Sprachfiltern, Beispielartikeln und Lesemodus umgesetzt.

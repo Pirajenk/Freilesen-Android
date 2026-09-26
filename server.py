@@ -7,6 +7,7 @@ import ipaddress
 import json
 import re
 import socket
+import time
 import urllib.parse
 import urllib.error
 import urllib.request
@@ -20,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 PREVIEW = ROOT / "preview"
 TOKEN = re.compile(r"[\wÄÖÜäöüß]{2,}", re.UNICODE)
+ACCESS_CACHE = {}
 STOP = set("""
 a an and are as at be been being but by can could did do does doing down during each few for from further had has have having he her here hers herself him himself his how i if in into is it its itself just me more most my myself no nor not now of off on once only or other our ours ourselves out over own same she should so some such than that the their theirs them themselves then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your yours yourself yourselves
 aber alle als also am an andere auch auf aus bei bin bis bist bitte bleiben dadurch dafür dagegen daher damit danach dann das dass dein deine dem den der des deshalb die dies diese dieser dieses doch dort du durch eigentlich ein eine einem einen einer eines einfach einmal er es etwas euer für gegen gewesen hat hatte hatten haben hier hin hinter ich ihm ihn ihre im immer in ins ist ja jeder jede jedes kann kein keine mit man mehr mein meine mich mir mit muss nach nachdem neben nein nicht nichts noch nun nur ob oder ohne sein seine selbst sich sie sind so über um und uns unser unter vom von vor war waren warum was weiter weil welcher welche welches wenn werden wie wieder wir wo zu zum zur zwischen
@@ -64,7 +66,7 @@ class MetadataParser(HTMLParser):
         elif tag == "title": self.in_title = True
         if tag == "article": self.article_depth += 1
         if tag == "main": self.main_depth += 1
-        if tag in ("div", "section", "aside") and re.search(r"paywall|pay-wall|subscriber.only|premium.content|paid.content|metered.content|registration.wall", (a.get("id", "") + " " + a.get("class", "")).lower()): self.paywall_markup = True
+        if tag in ("div", "section", "aside", "article") and re.search(r"pay.?wall|subscriber.?only|premium.?content|paid.?content|metered.?content|registration.?wall|article.?gate|content.?gate", (a.get("id", "") + " " + a.get("class", "")).lower()): self.paywall_markup = True
         elif tag in ("script", "style", "nav", "header", "footer", "aside"): self._skip += 1
     def handle_endtag(self, tag):
         if tag == "title": self.in_title = False
@@ -78,35 +80,45 @@ class MetadataParser(HTMLParser):
             if self.article_depth: self.article_text.append(data.strip())
             if self.main_depth: self.main_text.append(data.strip())
 
-PAYWALL_TEXT = re.compile(r"(?:subscribe\s+to\s+(?:read|continue)|subscription\s+(?:required|only)|sign\s+in\s+to\s+continue\s+reading|this\s+article\s+is\s+for\s+subscribers|only\s+available\s+to\s+subscribers|already\s+a\s+subscriber|nur\s+für\s+abonnenten|abo\s+erforderlich|weiterlesen\s+mit\s+(?:ihrem|deinem)\s+abo|plus-artikel|plus\s+freischalten|artikel\s+ist\s+kostenpflichtig|zahlungspflichtig|kostenpflichtig\s+lesen|zum\s+weiterlesen\s+abo)", re.I)
+PAYWALL_TEXT = re.compile(r"(?:subscribe\s+to\s+(?:read|continue)|subscription\s+(?:required|only)|sign\s+in\s+to\s+(?:continue\s+)?reading|log\s*in\s+to\s+read\s+(?:the\s+)?full\s+article|this\s+article\s+is\s+for\s+subscribers|only\s+available\s+to\s+subscribers|already\s+a\s+subscriber|subscriber.?only|premium\s+(?:article|content)|metered\s+(?:article|paywall)|register\s+to\s+(?:read|continue)|nur\s+für\s+abonnenten|exklusiv\s+für\s+abonnenten|abo\s+(?:erforderlich|abschließen)|weiterlesen\s+mit\s+(?:ihrem|deinem)\s+abo|plus-artikel|plus\s+freischalten|artikel\s+ist\s+kostenpflichtig|zahlungspflichtig|kostenpflichtig\s+lesen|zum\s+weiterlesen\s+abo|jetzt\s+(?:abonnieren|mitglied\s+werden)|registrieren\s+zum\s+weiterlesen)", re.I)
 
 def verify_free_access(url: str, source_host: str = ""):
-    """Classify live public access, excluding explicit paywalls and dead pages."""
+    """Use publisher markup and readable article content; cache short-lived results."""
+    cached = ACCESS_CACHE.get(url)
+    if cached and cached[0] > time.monotonic():
+        access, final_url = cached[1], cached[2]
+        if access == "same_source" or not same_publisher(urllib.parse.urlsplit(final_url).hostname or "", source_host):
+            return access, final_url
+    def verdict(access, final_url):
+        if access != "same_source":
+            ACCESS_CACHE[url] = (time.monotonic() + 900, access, final_url)
+            if len(ACCESS_CACHE) > 512: ACCESS_CACHE.pop(next(iter(ACCESS_CACHE)))
+        return access, final_url
     try:
-        final_url, page = fetch(url, 1_800_000, timeout=7)
+        # Publisher metadata and paywall selectors live in the document head;
+        # cap transfer size and time to avoid downloading whole articles.
+        final_url, page = fetch(url, 320_000, timeout=5)
         final_host = urllib.parse.urlsplit(final_url).hostname or ""
-        if same_publisher(final_host, source_host): return ("same_source", final_url)
+        if same_publisher(final_host, source_host): return verdict("same_source", final_url)
         parser = MetadataParser(); parser.feed(page)
         lowered = page.lower()
-        # Structured publisher signals are reliable in both directions.
-        if re.search(r'"isAccessibleForFree"\s*:\s*false|isaccessibleforfree\s*["\']?\s*content\s*=\s*["\']false', lowered):
-            return ("paywall", final_url)
+        # Structured signals include Google's Schema.org paywall markup.
+        if re.search(r'"isaccessibleforfree"\s*:\s*false|isaccessibleforfree\s*["\']?\s*content\s*=\s*["\']false|"(?:contenttier|accesslevel)"\s*:\s*"(?:premium|subscriber|paid)"', lowered):
+            return verdict("paywall", final_url)
         page_text = html.unescape(" ".join(parser.text))
-        if PAYWALL_TEXT.search(page_text): return ("paywall", final_url)
-        if re.search(r'"isAccessibleForFree"\s*:\s*true', lowered):
-            return ("verified_free", final_url)
-        # A page shell or short search teaser isn't enough. Many publishers use
-        # <main> rather than <article>; accept substantive readable body text.
+        if PAYWALL_TEXT.search(page_text) or parser.paywall_markup: return verdict("paywall", final_url)
+        if re.search(r'"isaccessibleforfree"\s*:\s*true', lowered):
+            return verdict("verified_free", final_url)
+        # A page shell, teaser, or access-denied response is not evidence of free access.
         article_text = re.sub(r"\s+", " ", " ".join(parser.article_text)).strip()
         main_text = re.sub(r"\s+", " ", " ".join(parser.main_text)).strip()
-        if len(article_text) >= 650: return ("likely_free" if parser.paywall_markup else "verified_free", final_url)
-        if len(main_text) >= 1000: return ("likely_free", final_url)
-        if len(page_text) >= 1800 and not parser.paywall_markup: return ("likely_free", final_url)
-        return ("unknown", final_url)
+        if len(article_text) >= 1200: return verdict("likely_free", final_url)
+        if len(main_text) >= 1800: return verdict("likely_free", final_url)
+        return verdict("unknown", final_url)
     except urllib.error.HTTPError as e:
-        return ("unavailable" if e.code in (404, 410) else "unknown", url)
+        return verdict("paywall" if e.code in (401, 402, 403) else "unavailable" if e.code in (404, 410) else "unknown", url)
     except Exception:
-        return ("unknown", url)
+        return verdict("unknown", url)
 
 def public_url(url: str) -> str:
     p = urllib.parse.urlsplit(url)
@@ -256,19 +268,18 @@ def search_news(meta):
             result = {"title":title, "description":item["description"][:360], "url":link, "source":item["source"] or host, "lang":item["language"], "published":item["published"], "score":score, "matchedTopics":list(overlap), "provider":provider}
             current = candidates.get(key)
             if current is None or score > current["score"]: candidates[key] = result
-    # Check a bounded set of highest relevance candidates against their live
-    # publisher pages. Search-index snippets and HTTP status alone don't prove
-    # that a story is free. Unknown/blocked/ambiguous pages are excluded.
+    # Check only the highest relevance candidates. Publisher markup is decisive;
+    # unknown/blocked/ambiguous pages stay hidden to avoid frustrating readers.
     matches = {}
-    top = sorted(candidates.items(), key=lambda item: -item[1]["score"])[:40]
-    with ThreadPoolExecutor(max_workers=10) as pool:
+    top = sorted(candidates.items(), key=lambda item: -item[1]["score"])[:24]
+    with ThreadPoolExecutor(max_workers=16) as pool:
         checked = list(pool.map(lambda pair: verify_free_access(pair[1]["url"], source_host), top))
     for (key, result), (access, final_url) in zip(top, checked):
-        if access not in ("paywall", "unavailable"):
+        if access in ("verified_free", "likely_free"):
             result["access"] = access
             result["url"] = final_url
             matches[key] = result
-    print("Suchprüfung: %d thematische Kandidaten, %d gezeigt, %d unbestätigt." % (len(candidates), len(matches), sum(1 for x in matches.values() if x["access"] == "unknown")), flush=True)
+    print("Zugriffsprüfung: %d Kandidaten, %d als frei bestätigt/lesbar gezeigt, %d wegen Paywall oder unklarem Zugriff ausgeblendet." % (len(candidates), len(matches), len(candidates) - len(matches)), flush=True)
     results = sorted(matches.values(), key=lambda x: (-x["score"], x["title"].lower()))
     return results[:12], ranked
 
