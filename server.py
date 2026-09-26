@@ -34,7 +34,7 @@ ALIASES = {
     "armenviertel":"poverty", "armut":"poverty", "poor":"poverty", "poverty":"poverty",
     "slums":"slum", "slum":"slum", "indian":"india", "india":"india",
     "nazi":"nazi", "nazis":"nazi", "nationalsozialismus":"nazi", "nationalsozialistisch":"nazi", "nsdap":"nazi", "hitler":"nazi",
-    "mitgliederkartei":"membership", "mitgliedskartei":"membership", "mitgliedskarteien":"membership", "mitgliedschaft":"membership", "mitglied":"membership", "members":"membership", "membership":"membership",
+    "mitgliederkartei":"membership", "mitgliedskartei":"membership", "mitgliedskarteien":"membership", "mitgliedschaft":"membership", "mitglied":"membership", "membership":"membership",
     "kartei":"records", "karteikarte":"records", "karteikarten":"records", "akten":"records", "akte":"records", "archive":"records", "archives":"records", "archiv":"records", "archiviert":"records", "records":"records", "files":"records", "file":"records",
     "familie":"family", "familien":"family", "family":"family", "families":"family",
     "geschichte":"history", "geschichten":"history", "history":"history", "histories":"history",
