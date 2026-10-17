@@ -8,4 +8,7 @@ services:
     buildCommand: python -m compileall -q server.py
     startCommand: python server.py
     healthCheckPath: /healthz
-    autoDeployTrigger: off
+    autoDeployTrigger: commit
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: https://pirajenk.github.io

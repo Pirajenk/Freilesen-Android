@@ -625,6 +625,18 @@ class Handler(SimpleHTTPRequestHandler):
     rate_limit_per_minute = 10
 
     def __init__(self, *args, **kwargs): super().__init__(*args, directory=str(PREVIEW), **kwargs)
+    def end_headers(self):
+        origin = self.headers.get("Origin", "")
+        allowed_origins = {
+            item.strip()
+            for item in os.environ.get("ALLOWED_ORIGINS", "https://pirajenk.github.io").split(",")
+            if item.strip()
+        }
+        if origin and origin in allowed_origins:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+        super().end_headers()
+
     def do_GET(self):
         if self.path == "/healthz":
             self._json_response(200, {"ok": True})
@@ -704,6 +716,25 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(data)
+
+    def do_OPTIONS(self):
+        if urllib.parse.urlsplit(self.path).path != "/api/search":
+            self.send_error(404)
+            return
+        origin = self.headers.get("Origin", "")
+        allowed_origins = {
+            item.strip()
+            for item in os.environ.get("ALLOWED_ORIGINS", "https://pirajenk.github.io").split(",")
+            if item.strip()
+        }
+        self.send_response(204 if origin in allowed_origins else 403)
+        if origin in allowed_origins:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Max-Age", "600")
+            self.send_header("Vary", "Origin")
+        self.end_headers()
 
     def log_message(self, fmt, *args):
         if self.path.startswith("/api/search"):

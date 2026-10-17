@@ -1,0 +1,36 @@
+name: Publish browser preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "preview/**"
+      - ".github/workflows/deploy-pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload browser preview
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: preview
+      - name: Deploy browser preview
+        id: deployment
+        uses: actions/deploy-pages@v4

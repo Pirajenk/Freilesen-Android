@@ -18,6 +18,10 @@ Freilesen umgeht keine Paywalls, entfernt keine Bezahlschranken und extrahiert k
 - Android-Emulator: derselbe Server muss laufen; Android Studio/Emulator greift über `http://10.0.2.2:8765` zu
 - Oberfläche: Deutsch/Englisch, Quellenfilter, Artikelliste, Lesemodus
 
+## Öffentliche Browser-Demo
+
+Die Browser-Oberfläche wird über GitHub Pages unter [pirajenk.github.io/Freilesen-Android](https://pirajenk.github.io/Freilesen-Android/) veröffentlicht. Die Suche benötigt zusätzlich das kostenlose Render-Backend aus `render.yaml`; dessen Instanz kann bei Inaktivität einschlafen und beim ersten Aufruf verzögert reagieren. Eingefügte Links werden zur Metadatenanalyse an das Backend übermittelt; Suchthemen werden an externe Nachrichtenindizes gesendet. GitHub Pages kann die Oberfläche selbst hosten, aber keinen Python-Suchdienst ausführen.
+
 ## Entwicklungsstand
 
 Die Vorschau und die Android-Oberfläche verwenden `server.py`: Der Server liest Artikel-Metadaten und JSON-LD (Überschrift, Schlagwörter, Kurzbeschreibung und — falls veröffentlicht — Artikeltext), sucht parallel in Google News RSS und GDELT, fragt thematisch gefilterte Quellen aus einem 616er-Feedkatalog ab und ergänzt 31 einzeln dokumentierte unabhängige Redaktionen und Autorenblogs. Darunter sind Investigativprojekte, Fachpublikationen und eigenständige Blogs aus Deutschland und dem englischsprachigen Raum. Zusätzlich durchsucht er Substack, Medium, Ghost, WordPress, Buttondown, beehiiv, write.as, Blogspot und Blogger nach passenden Beiträgen, auch wenn Autorinnen und Autoren nicht vorab in einem Verzeichnis stehen. Die App kann Ergebnisse anschließend über „Alle“, „Deutsch“ und „English“ filtern. Die offene Plattform-Suche ist breiter, aber keine redaktionelle Qualitätsbestätigung; Autorenschaft, externe Belege sowie Korrektur-, Methoden- und Transparenzhinweise werden als beobachtbare Signale angezeigt. RSS-Feeds und Plattformen sind Entdeckungshinweise, kein Nachweis, dass ein einzelner Artikel kostenlos oder sachlich richtig ist.
