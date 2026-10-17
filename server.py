@@ -729,11 +729,9 @@ class Handler(SimpleHTTPRequestHandler):
         }
         self.send_response(204 if origin in allowed_origins else 403)
         if origin in allowed_origins:
-            self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.send_header("Access-Control-Max-Age", "600")
-            self.send_header("Vary", "Origin")
         self.end_headers()
 
     def log_message(self, fmt, *args):
